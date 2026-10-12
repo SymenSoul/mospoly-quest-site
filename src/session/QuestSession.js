@@ -3,7 +3,7 @@ import { ApiError, getTasks, registerParticipant, submitAttempt } from '../api/c
 // Ключ, под которым сессия хранится в localStorage
 const STORAGE_KEY = 'zoo-quest-session';
 
-// Ключ прежнего хранилища прогресса (useQuestProgress), переносится в сессию один раз
+// Ключ прогресса прежнего квеста Орлова — к квесту зоопарка не относится и удаляется
 const LEGACY_PROGRESS_KEY = 'polytech-cyber-quest-progress';
 
 // Версия формата: при несовместимых изменениях полей старые сессии сбрасываются
@@ -45,21 +45,8 @@ export class QuestSession {
   // Загружает сохранённую сессию или создаёт новую
   static load() {
     const session = new QuestSession();
-    const stored = readStoredState();
-
-    if (stored) {
-      session.#state = stored;
-      return session;
-    }
-
-    const migrated = readLegacyProgress();
-    if (migrated) {
-      // Сначала сохраняем под новым ключом, потом удаляем старый — чтобы прогресс не потерялся
-      session.#state = migrated;
-      session.save();
-      removeLegacyProgress();
-    }
-
+    session.#state = readStoredState() ?? createInitialState();
+    removeLegacyProgress();
     return session;
   }
 
@@ -217,20 +204,6 @@ export class QuestSession {
     }
   }
 
-  // Отмечает задание решённым без бэкенда — для заданий, которые проверяются в браузере
-  markSolved(taskKey) {
-    const { solved } = this.#state;
-    if (!solved.includes(taskKey)) {
-      this.#update({ solved: [...solved, taskKey] });
-    }
-  }
-
-  // Сбрасывает прогресс прохождения, сохраняя участника и задания
-  resetProgress() {
-    const { participant, tasks, status } = this.#state;
-    this.#replace({ ...createInitialState(), participant, tasks, status: status === 'finished' ? 'active' : status });
-  }
-
   #requireParticipant() {
     if (!this.#state.participant) {
       throw new ApiError('Участник не зарегистрирован', { status: 401 });
@@ -275,26 +248,6 @@ function readStoredState() {
     finishedAt: typeof saved.finishedAt === 'string' ? saved.finishedAt : null,
     finishReason: ['completed', 'gave_up'].includes(saved.finishReason) ? saved.finishReason : null,
   };
-}
-
-// Читает прогресс из прежнего ключа useQuestProgress
-function readLegacyProgress() {
-  try {
-    const legacy = JSON.parse(localStorage.getItem(LEGACY_PROGRESS_KEY));
-    if (!legacy) return null;
-
-    const initial = createInitialState();
-
-    return {
-      ...initial,
-      active: Number.isInteger(legacy.active) && legacy.active >= 0 ? legacy.active : initial.active,
-      solved: isStringArray(legacy.solved) ? legacy.solved : initial.solved,
-      showBriefing: typeof legacy.showBriefing === 'boolean' ? legacy.showBriefing : initial.showBriefing,
-      readStories: isStringArray(legacy.readStories) ? legacy.readStories : initial.readStories,
-    };
-  } catch {
-    return null;
-  }
 }
 
 function removeLegacyProgress() {
