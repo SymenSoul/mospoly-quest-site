@@ -16,7 +16,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { useQuestProgress } from './hooks/useQuestProgress';
+import { useQuestSession } from './hooks/useQuestSession';
 
 const modules = [
   {
@@ -95,8 +95,8 @@ const logLines = [
 ];
 
 export default function App() {
-  // Подключаем состояние прогресса квеста и функции его изменения
-  const { active, setActive, solved, setSolved, showBriefing, setShowBriefing, readStories, setReadStories, resetProgress } = useQuestProgress();
+  // Сессия участника: прогресс квеста сохраняется в localStorage (src/session/QuestSession.js)
+  const { active, solved, showBriefing, readStories, session } = useQuestSession();
 
   const [showResetModal, setShowResetModal] = useState(false);
 
@@ -111,19 +111,19 @@ export default function App() {
   }, [solved]);
 
   function solveCurrent() {
-    setSolved((items) => (items.includes(module.id) ? items : [...items, module.id]));
+    session.markSolved(module.id);
 
     if (active < modules.length - 1) {
-      setActive(active + 1);
+      session.setActive(active + 1);
     }
 
-    setShowBriefing(true);
+    session.setShowBriefing(true);
   }
 
   function goNext() {
     if (active < modules.length - 1) {
-      setActive(active + 1);
-      setShowBriefing(true);
+      session.setActive(active + 1);
+      session.setShowBriefing(true);
     }
   }
 
@@ -134,13 +134,11 @@ export default function App() {
 
   // Сбрасываем прогресс после подтверждения
   function confirmReset() {
-    resetProgress();
+    session.resetProgress();
     setShowResetModal(false);
   }
 
-  const markStoryRead = useCallback((storyKey) => {
-    setReadStories((items) => (items.includes(storyKey) ? items : [...items, storyKey]));
-  }, []);
+  const markStoryRead = useCallback((storyKey) => session.markStoryRead(storyKey), [session]);
 
   return (
     <main className="app-shell" style={{ '--accent': module.accent, '--accent-rgb': module.accentRgb }}>
@@ -177,8 +175,8 @@ export default function App() {
                 className={`nav-node ${active === index ? 'active' : ''} ${done ? 'done' : ''}`}
                 disabled={!available}
                 onClick={() => {
-                  setActive(index);
-                  setShowBriefing(true);
+                  session.setActive(index);
+                  session.setShowBriefing(true);
                 }}
               >
                 <Icon size={18} />
@@ -261,12 +259,12 @@ export default function App() {
             isFinal={active === modules.length - 1}
             hasPlayed={readStories.includes(`${module.id}-${isSolved ? 'outcome' : 'intro'}`)}
             onRead={markStoryRead}
-            onStart={() => setShowBriefing(false)}
+            onStart={() => session.setShowBriefing(false)}
             onNext={goNext}
             onReset={resetMission}
           />
         ) : (
-          <ChallengeFrame solved={isSolved} onBrief={() => setShowBriefing(true)}>
+          <ChallengeFrame solved={isSolved} onBrief={() => session.setShowBriefing(true)}>
             <Challenge onSolve={solveCurrent} solved={isSolved} />
           </ChallengeFrame>
         )}

@@ -43,7 +43,12 @@ npm run preview
   подсветка своей строки по `?me=Имя+Фамилия`.
 - `src/App.jsx` — весь квест: массив `modules` (тексты брифингов и компонент задания), экран брифинга
   с печатью текста, компоненты заданий. Ответ проверяется в браузере, кнопка активна только при верном ответе.
-- `src/hooks/useQuestProgress.js` — прогресс в localStorage под ключом `polytech-cyber-quest-progress`.
+- `src/session/QuestSession.js` — класс сессии участника: поля (участник с токеном, задания, решённые,
+  попытки, баллы, состояние интерфейса, завершение) и методы `load/save/clear`, `register`, `loadTasks`,
+  `submitAnswer`, `finish`, `getSummary`. Хранится в localStorage под ключом `zoo-quest-session`
+  с полем `version`; при несовместимом изменении полей увеличить `SESSION_VERSION`.
+- `src/hooks/useQuestSession.js` — единственный экземпляр сессии на вкладку и хук для React
+  (`useSyncExternalStore`). Компоненты меняют состояние только через методы сессии.
 
 Деплой:
 - `.github/workflows/deploy.yml`: push в `main` или `dev` → образ `ghcr.io/veselovese/mospoly-quest-site:<ветка>`

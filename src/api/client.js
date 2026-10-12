@@ -56,6 +56,28 @@ export async function request(path, { method = 'GET', token, body, signal } = {}
   return data;
 }
 
+// Регистрация участника: возвращает participant_id, token и started_at
+export function registerParticipant({ firstName, lastName }) {
+  return request('/participants/', {
+    method: 'POST',
+    body: { first_name: firstName, last_name: lastName },
+  });
+}
+
+// Активные задания участника (без правильных ответов)
+export function getTasks(token) {
+  return request('/tasks/', { token });
+}
+
+// Отправка ответа: бэкенд проверяет его, сохраняет попытку и начисляет баллы
+export function submitAttempt(token, taskId, answer) {
+  return request(`/tasks/${taskId}/attempts/`, {
+    method: 'POST',
+    token,
+    body: { answer },
+  });
+}
+
 // Общий рейтинг участников, доступен без авторизации
 export function getRanking({ signal } = {}) {
   return request('/ranking/', { signal });
