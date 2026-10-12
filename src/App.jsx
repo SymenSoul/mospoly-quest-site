@@ -13,6 +13,7 @@ import {
   RotateCcw,
   ShieldAlert,
   TerminalSquare,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useQuestProgress } from './hooks/useQuestProgress';
@@ -197,6 +198,11 @@ export default function App() {
             <code key={line}>{line}</code>
           ))}
         </div>
+
+        <a className="ghost-action leaderboard-link" href="/leaderboard">
+          <Trophy size={16} />
+          Лидерборд
+        </a>
 
         <button className="ghost-action reset-progress-action" onClick={resetMission}>
             <RotateCcw size={16} />
