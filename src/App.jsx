@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Globe2, Loader2, LogOut, PawPrint, RotateCcw, Trophy } from 'lucide-react';
+import { AlertTriangle, Check, Globe2, Loader2, LogOut, Menu, PawPrint, RotateCcw, Trophy, X } from 'lucide-react';
 import { useQuestSession } from './hooks/useQuestSession';
 import { BLOCKS, QUEST_TASKS, SHIFT_START_LOG, personalize } from './quest/zooQuest';
 import ChallengeFrame from './components/ChallengeFrame';
@@ -86,6 +86,8 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [showFinishModal, setShowFinishModal] = useState(false);
+  // На узких экранах навигация и журнал спрятаны в раскрывающейся панели
+  const [railOpen, setRailOpen] = useState(false);
 
   // Задания с бэкенда, для которых есть интерфейс, в порядке order
   const questTasks = useMemo(
@@ -171,71 +173,97 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
   function openTask(taskIndex) {
     session.setActive(taskIndex);
     session.setShowBriefing(true);
+    setRailOpen(false);
   }
 
   return (
     <main className="app-shell" style={{ '--accent': accent.accent, '--accent-rgb': accent.accentRgb }}>
       <div className="scanlines" aria-hidden="true" />
-      <aside className="side-rail">
-        <div className="brand">
-          <div className="brand-mark">
-            <PawPrint size={23} />
+      <aside className={`side-rail ${railOpen ? 'is-open' : ''}`}>
+        <div className="rail-top">
+          <div className="brand">
+            <div className="brand-mark">
+              <PawPrint size={23} />
+            </div>
+            <div>
+              <p>Код манула</p>
+              <span>Смена: {participant.firstName} {participant.lastName}</span>
+            </div>
           </div>
-          <div>
-            <p>Код манула</p>
-            <span>Смена: {participant.firstName} {participant.lastName}</span>
-          </div>
-        </div>
 
-        <div className="progress-block">
-          <div className="progress-head">
-            <span>Расследование</span>
+          <button
+            className="ghost-action rail-toggle"
+            aria-expanded={railOpen}
+            aria-controls="rail-details"
+            aria-label={railOpen ? 'Скрыть меню' : 'Показать меню'}
+            onClick={() => setRailOpen((open) => !open)}
+          >
             <strong>{progress}%</strong>
-          </div>
-          <div className="progress-track">
+            {railOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+
+          <div className="rail-progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
           </div>
         </div>
 
-        <nav className="mission-nav" aria-label="Задания квеста">
-          {questTasks.map((item, itemIndex) => {
-            const Icon = item.icon;
-            const done = solved.includes(item.taskType);
-            return (
-              <button
-                key={item.taskType}
-                className={`nav-node ${index === itemIndex ? 'active' : ''} ${done ? 'done' : ''}`}
-                disabled={!unlocked[itemIndex]}
-                onClick={() => openTask(itemIndex)}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-                {done && <Check size={16} />}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="signal-panel">
-          <div className="panel-title">
-            <Globe2 size={16} />
-            Журнал смены
+        <div className="rail-details" id="rail-details">
+          <div className="progress-block">
+            <div className="progress-head">
+              <span>Расследование</span>
+              <strong>{progress}%</strong>
+            </div>
+            <div className="progress-track">
+              <span style={{ width: `${progress}%` }} />
+            </div>
           </div>
-          <code>{personalize(SHIFT_START_LOG, participant.firstName)}</code>
-          {solvedTasks.map((item) => (
-            <code key={item.taskType}>{item.log}</code>
-          ))}
-        </div>
 
-        <div className="rail-actions">
-          <a className="ghost-action leaderboard-link" href="/leaderboard">
-            <Trophy size={16} />
-            Лидерборд
-          </a>
-          <button className="ghost-action" onClick={() => setShowFinishModal(true)}>
-            <LogOut size={16} />
-            Завершить смену
-          </button>
+          <nav className="mission-nav" aria-label="Задания квеста">
+            {questTasks.map((item, itemIndex) => {
+              const Icon = item.icon;
+              const done = solved.includes(item.taskType);
+              return (
+                <button
+                  key={item.taskType}
+                  className={`nav-node ${index === itemIndex ? 'active' : ''} ${done ? 'done' : ''}`}
+                  disabled={!unlocked[itemIndex]}
+                  onClick={() => openTask(itemIndex)}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                  {done && <Check size={16} />}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="signal-panel">
+            <div className="panel-title">
+              <Globe2 size={16} />
+              Журнал смены
+            </div>
+            <code>{personalize(SHIFT_START_LOG, participant.firstName)}</code>
+            {solvedTasks.map((item) => (
+              <code key={item.taskType}>{item.log}</code>
+            ))}
+          </div>
+
+          <div className="rail-actions">
+            <a className="ghost-action leaderboard-link" href="/leaderboard">
+              <Trophy size={16} />
+              Лидерборд
+            </a>
+            <button
+              className="ghost-action"
+              onClick={() => {
+                setRailOpen(false);
+                setShowFinishModal(true);
+              }}
+            >
+              <LogOut size={16} />
+              Завершить смену
+            </button>
+          </div>
         </div>
       </aside>
 
