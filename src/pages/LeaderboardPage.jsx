@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowLeft, RefreshCw, Trophy } from 'lucide-react';
 import { getRanking } from '../api/client';
+import { formatDuration } from '../utils/format';
 
 // Как часто обновлять рейтинг (по требованию — раз в 2–3 секунды)
 const POLL_INTERVAL_MS = 3000;
@@ -200,16 +201,4 @@ function normalizeName(name) {
 
 function formatClock(timestamp) {
   return new Date(timestamp).toLocaleTimeString('ru-RU');
-}
-
-// 1240 → «20:40», 3725 → «1:02:05»; пока участник не закончил, бэкенд может не вернуть время
-function formatDuration(totalSeconds) {
-  if (!Number.isFinite(totalSeconds)) return '—';
-
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = Math.floor(totalSeconds % 60);
-  const pad = (value) => String(value).padStart(2, '0');
-
-  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
 }
