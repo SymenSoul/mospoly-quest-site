@@ -19,19 +19,28 @@
 ## Команды
 
 ```bash
-npm install     # package-lock.json в .gitignore — не коммитить
-npm run dev     # Vite на 0.0.0.0:5173
-npm run build   # сборка в dist/
+npm install       # package-lock.json в .gitignore — не коммитить
+npm run dev       # Vite на 0.0.0.0:5173, /api проксируется на VITE_API_PROXY (по умолчанию localhost:8000)
+npm run dev:mock  # то же, но без бэкенда: API отвечает мок из src/api/mock.js (режим .env.mock)
+npm run build     # сборка в dist/
 npm run preview
 ```
 
-Тестов и линтера нет: проверка — сборка и ручной прогон в браузере.
+Переменные окружения — в `.env.example` (`VITE_API_URL`, `VITE_API_PROXY`, `VITE_API_MOCK`), личные значения —
+в `.env.local`. Тестов и линтера нет: проверка — сборка и ручной прогон в браузере.
 
 ## Архитектура
 
 - React 19 + Vite 7, иконки `lucide-react`. Все стили — в одном `src/styles.css`, без CSS-модулей
   и препроцессоров.
-- `src/main.jsx` — точка входа и `ErrorBoundary`.
+- `src/main.jsx` — точка входа, `ErrorBoundary` и маршрутизация по `location.pathname`: `/leaderboard` →
+  `src/pages/LeaderboardPage.jsx`, остальное → квест. Роутера нет, переходы — обычные ссылки.
+- `src/api/client.js` — все запросы к бэкенду (`request()`, `ApiError` со `status: 0` при отсутствии связи).
+  При `VITE_API_MOCK=true` запросы уходят в `src/api/mock.js` (база в localStorage, общая для вкладок,
+  с демо-участниками). Мок подгружается динамически и в обычную сборку не попадает — проверка:
+  `grep demo-token dist/assets/*.js` ничего не находит.
+- `src/pages/LeaderboardPage.jsx` — рейтинг, опрос `GET /api/ranking/` раз в 3 с, пауза в скрытой вкладке,
+  подсветка своей строки по `?me=Имя+Фамилия`.
 - `src/App.jsx` — весь квест: массив `modules` (тексты брифингов и компонент задания), экран брифинга
   с печатью текста, компоненты заданий. Ответ проверяется в браузере, кнопка активна только при верном ответе.
 - `src/hooks/useQuestProgress.js` — прогресс в localStorage под ключом `polytech-cyber-quest-progress`.
@@ -39,7 +48,9 @@ npm run preview
 Деплой:
 - `.github/workflows/deploy.yml`: push в `main` или `dev` → образ `ghcr.io/veselovese/mospoly-quest-site:<ветка>`
   → деплой по SSH. `main` — прод, `dev` — стейдж. Push в `dev` сразу выкатывается на стейдж.
-- `Dockerfile`: сборка на `node:22-alpine`, раздача `dist/` через `nginx:stable-alpine`.
+- `Dockerfile`: сборка на `node:22-alpine`, раздача `dist/` через `nginx:stable-alpine` с `deploy/nginx.conf`
+  (SPA-fallback: любой путь отдаёт `index.html`, иначе `/leaderboard` даёт 404).
+- Запросы `/api` в проде должны уходить на бэкенд через Caddy — в `deploy/Caddyfile` этого пока нет.
 - `deploy/`: `docker-compose.yml` и `Caddyfile` (`:80` → `frontend-prod`, `:8080` → `frontend-stage`),
   `deploy.sh` на сервере в `/opt/quest`.
 
