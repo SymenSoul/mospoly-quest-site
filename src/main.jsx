@@ -1,6 +1,7 @@
 import { Component, StrictMode, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import './styles.css';
 
 class ErrorBoundary extends Component {
@@ -27,10 +28,14 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Простая маршрутизация по адресу: /leaderboard — рейтинг, всё остальное — квест
+const isLeaderboard = window.location.pathname.replace(/\/+$/, '') === '/leaderboard';
+const Page = isLeaderboard ? LeaderboardPage : App;
+
 createRoot(document.getElementById('root')).render(
   createElement(
     StrictMode,
     null,
-    createElement(ErrorBoundary, null, createElement(App)),
+    createElement(ErrorBoundary, null, createElement(Page)),
   ),
 );

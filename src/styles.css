@@ -935,3 +935,324 @@ th {
   min-height: auto;
   padding: 24px;
 }
+.leaderboard-link {
+  width: 100%;
+  color: #dcecff;
+  text-decoration: none;
+}
+
+/* Лидерборд */
+
+.leaderboard-shell {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 76% 10%, rgba(41, 240, 200, 0.12), transparent 28%),
+    radial-gradient(circle at 12% 92%, rgba(255, 95, 159, 0.08), transparent 26%),
+    linear-gradient(130deg, #080a10 0%, #111625 52%, #0b1016 100%);
+}
+
+.leaderboard-page {
+  width: min(70rem, 100%);
+  margin: 0 auto;
+  padding: clamp(16px, 4vw, 48px);
+  display: grid;
+  gap: 20px;
+}
+
+.leaderboard-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'back back'
+    'title status';
+  align-items: end;
+  gap: 18px 24px;
+}
+
+.leaderboard-back {
+  grid-area: back;
+  width: fit-content;
+  text-decoration: none;
+}
+
+.leaderboard-title {
+  grid-area: title;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.leaderboard-title .brand-mark {
+  flex: none;
+}
+
+.leaderboard-title h1 {
+  margin-bottom: 6px;
+  font-size: clamp(2rem, 5vw, 3.6rem);
+}
+
+.leaderboard-status {
+  grid-area: status;
+  min-width: 220px;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  color: #8da5bb;
+  font-size: 0.82rem;
+}
+
+.leaderboard-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leaderboard-status .is-spinning {
+  animation: leaderboardSpin 0.9s linear infinite;
+}
+
+.leaderboard-countdown {
+  width: 100%;
+  height: 4px;
+  background: #0d1420;
+  overflow: hidden;
+}
+
+.leaderboard-countdown span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  animation-name: leaderboardCountdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes leaderboardCountdown {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes leaderboardSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.leaderboard-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 95, 159, 0.45);
+  background: rgba(255, 95, 159, 0.08);
+  color: #ffcbdf;
+  font-size: 0.9rem;
+}
+
+.leaderboard-error svg {
+  flex: none;
+}
+
+.leaderboard-empty {
+  margin: 0;
+  padding: 28px;
+  border: 1px dashed rgba(237, 247, 255, 0.16);
+  color: #8da5bb;
+  text-align: center;
+}
+
+.leaderboard-table {
+  padding: 8px 20px 12px;
+  border: 1px solid rgba(237, 247, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+    rgba(9, 12, 20, 0.78);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+}
+
+.leaderboard-table table {
+  margin-top: 0;
+  font-size: 0.95rem;
+}
+
+.leaderboard-table th:nth-child(n + 3),
+.leaderboard-table td:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-table tbody tr {
+  transition: background 200ms ease;
+}
+
+.leaderboard-table tr.is-me {
+  background: rgba(var(--accent-rgb), 0.14);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.place-badge {
+  min-width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 6px;
+  border: 1px solid rgba(237, 247, 255, 0.14);
+  color: #dcecff;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-top-1 .place-badge {
+  border-color: #ffdd55;
+  background: rgba(255, 221, 85, 0.16);
+  color: #ffdd55;
+}
+
+.is-top-2 .place-badge {
+  border-color: #c9d9e8;
+  background: rgba(201, 217, 232, 0.12);
+  color: #e6f2ff;
+}
+
+.is-top-3 .place-badge {
+  border-color: #ff9f6e;
+  background: rgba(255, 159, 110, 0.12);
+  color: #ffc3a3;
+}
+
+.leaderboard-name {
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.leaderboard-name em {
+  margin-left: 10px;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: #061017;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.leaderboard-score {
+  color: var(--accent);
+  font-weight: 850;
+}
+
+@media (max-width: 720px) {
+  .leaderboard-header {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'back'
+      'title'
+      'status';
+    align-items: start;
+  }
+
+  .leaderboard-status {
+    min-width: 0;
+    justify-items: start;
+  }
+}
+
+/* На узких экранах строки рейтинга превращаются в карточки */
+@media (max-width: 560px) {
+  .leaderboard-title {
+    gap: 12px;
+  }
+
+  .leaderboard-title .brand-mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .leaderboard-table {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .leaderboard-table thead {
+    display: none;
+  }
+
+  .leaderboard-table table,
+  .leaderboard-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .leaderboard-table tbody tr {
+    display: grid;
+    grid-template-columns: 36px repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      'place name name score'
+      'place solved attempts time';
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px;
+    border: 1px solid rgba(237, 247, 255, 0.12);
+    background: rgba(9, 12, 20, 0.78);
+  }
+
+  .leaderboard-table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .leaderboard-table td:nth-child(1) {
+    grid-area: place;
+    align-self: start;
+  }
+
+  .leaderboard-table td:nth-child(2) {
+    grid-area: name;
+  }
+
+  .leaderboard-table td:nth-child(3) {
+    grid-area: score;
+    font-size: 1.15rem;
+  }
+
+  .leaderboard-table td:nth-child(4) {
+    grid-area: solved;
+  }
+
+  .leaderboard-table td:nth-child(5) {
+    grid-area: attempts;
+  }
+
+  .leaderboard-table td:nth-child(6) {
+    grid-area: time;
+  }
+
+  /* Решено, попытки и время — маленькими плашками: подпись сверху, значение снизу */
+  .leaderboard-table td:nth-child(n + 4) {
+    display: grid;
+    gap: 2px;
+    color: #dcecff;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+
+  .leaderboard-table td:nth-child(n + 4)::before {
+    content: attr(data-label);
+    color: #8da5bb;
+    font-size: 0.7rem;
+  }
+
+  .leaderboard-name em {
+    display: inline-block;
+    margin: 4px 0 0;
+  }
+}
