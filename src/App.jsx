@@ -81,7 +81,7 @@ function ScreenShell({ children }) {
 }
 
 function QuestScreen({ state, session, onFinish, onSessionLost }) {
-  const { participant, tasks, active, solved, points, showBriefing, readStories } = state;
+  const { participant, tasks, active, solved, attempts, points, showBriefing, readStories } = state;
   const [tasksStatus, setTasksStatus] = useState(() => ({ loading: tasks.length === 0, error: null }));
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -315,7 +315,12 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
                 onFinish={() => onFinish('completed')}
               />
             ) : (
-              <ChallengeFrame task={task} solved={solved.includes(task.taskType)} onBrief={() => session.setShowBriefing(true)}>
+              <ChallengeFrame
+                task={task}
+                solved={solved.includes(task.taskType)}
+                attempts={attempts[task.taskType] ?? 0}
+                onBrief={() => session.setShowBriefing(true)}
+              >
                 <task.component
                   key={task.taskType}
                   solved={solved.includes(task.taskType)}
