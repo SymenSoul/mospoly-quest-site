@@ -73,6 +73,7 @@ export default function PaternityChallenge({ solved, submit }) {
   return (
     <div className="workbench">
       <h2>Генетические профили</h2>
+      <p className="scroll-hint">Таблицу можно прокрутить вбок →</p>
 
       <div className="table-scroll">
         <table className="marker-table">

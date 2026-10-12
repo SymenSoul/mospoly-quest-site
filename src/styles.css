@@ -1645,6 +1645,19 @@ th {
   background: #070b13;
 }
 
+.scroll-hint {
+  display: none;
+  margin: -6px 0 0;
+  color: #8da5bb;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 720px) {
+  .scroll-hint {
+    display: block;
+  }
+}
+
 .marker-table {
   min-width: 36rem;
   margin: 0;
@@ -1777,6 +1790,74 @@ th {
   }
 }
 
+/* Карточка задания: краткое условие, баллы и попытки */
+
+.task-brief {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  border-left: 4px solid var(--accent);
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.1), transparent 60%),
+    rgba(6, 9, 17, 0.9);
+}
+
+.task-brief-toggle {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.task-brief-chevron {
+  transition: transform 200ms ease;
+}
+
+.task-brief-toggle[aria-expanded='false'] .task-brief-chevron {
+  transform: rotate(-90deg);
+}
+
+.task-brief-text {
+  margin: 0;
+  max-width: 60rem;
+  color: #f4fbff;
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(237, 247, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9d9e8;
+  font-size: 0.82rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-meta svg {
+  color: var(--accent);
+}
+
 /* Мобильная версия: телефоны от 320 px */
 
 @media (max-width: 860px) {
@@ -1840,6 +1921,11 @@ th {
   .submit-action,
   .submit-action .primary-action {
     width: 100%;
+  }
+
+  .task-brief {
+    margin-bottom: 12px;
+    padding: 12px;
   }
 
   .reset-modal-backdrop {

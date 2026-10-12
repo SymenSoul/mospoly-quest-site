@@ -1,8 +1,13 @@
-import { BookOpen } from 'lucide-react';
+import { useState } from 'react';
+import { BookOpen, ChevronDown, ClipboardList, Repeat, Star } from 'lucide-react';
+import { plural } from '../utils/format';
 import HintPanel from './HintPanel';
 
-// Окно выполнения задания: рабочая область, памятка и подсказки
-export default function ChallengeFrame({ task, solved, onBrief, children }) {
+// Окно выполнения задания: краткое условие, баллы и попытки, рабочая область, памятка и подсказки
+export default function ChallengeFrame({ task, solved, attempts, onBrief, children }) {
+  const [briefOpen, setBriefOpen] = useState(true);
+  const briefId = `task-brief-${task.taskType}`;
+
   return (
     <div className="challenge-frame">
       <div className="challenge-topline">
@@ -11,6 +16,36 @@ export default function ChallengeFrame({ task, solved, onBrief, children }) {
           Вернуться к брифингу
         </button>
       </div>
+
+      <section className="task-brief">
+        <button
+          className="task-brief-toggle"
+          aria-expanded={briefOpen}
+          aria-controls={briefId}
+          onClick={() => setBriefOpen((open) => !open)}
+        >
+          <ClipboardList size={18} />
+          Задание
+          <ChevronDown size={18} className="task-brief-chevron" />
+        </button>
+
+        {briefOpen && (
+          <p id={briefId} className="task-brief-text">
+            {task.brief}
+          </p>
+        )}
+
+        <div className="task-meta">
+          <span>
+            <Star size={15} />
+            {task.points} {plural(task.points, ['балл', 'балла', 'баллов'])}
+          </span>
+          <span>
+            <Repeat size={15} />
+            Попыток: {attempts}
+          </span>
+        </div>
+      </section>
 
       <div className="challenge-body">
         <div className="challenge-main">{children}</div>
