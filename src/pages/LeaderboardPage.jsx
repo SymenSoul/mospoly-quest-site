@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowLeft, RefreshCw, Trophy } from 'lucide-react';
-import { getRanking } from '../api/client';
+import { getQuestConfig, getRanking } from '../api/client';
+import { getFallbackQuestConfig, normalizeQuestKey } from '../quest/questRegistry';
 import { formatDuration } from '../utils/format';
 
 // Как часто обновлять рейтинг (по требованию — раз в 2–3 секунды)
@@ -10,6 +11,9 @@ export default function LeaderboardPage() {
   // Имя участника из ссылки «Найди себя на лидерборде»: /leaderboard?me=Имя+Фамилия
   const me = useMemo(() => normalizeName(new URLSearchParams(window.location.search).get('me') ?? ''), []);
 
+  const mockQuestKey = import.meta.env.VITE_MOCK_QUEST === 'orlov' ? 'orlov' : 'zoo';
+  const [questConfig, setQuestConfig] = useState(() => getFallbackQuestConfig(mockQuestKey));
+  const questKey = normalizeQuestKey(questConfig.key);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -19,8 +23,33 @@ export default function LeaderboardPage() {
   const scrolledToMe = useRef(false);
 
   useEffect(() => {
-    document.title = 'Лидерборд — Код манула';
+    let disposed = false;
+    let timerId = null;
+    let controller = null;
+
+    async function refreshQuestConfig() {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const config = await getQuestConfig({ signal: controller.signal });
+        if (!disposed) setQuestConfig(config);
+      } catch (error) {
+        if (disposed || error.name === 'AbortError') return;
+      }
+      if (!disposed) timerId = window.setTimeout(refreshQuestConfig, 15000);
+    }
+
+    refreshQuestConfig();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timerId);
+      controller?.abort();
+    };
   }, []);
+
+  useEffect(() => {
+    document.title = `Лидерборд — ${questConfig.title || 'квест'}`;
+  }, [questConfig.title]);
 
   // Опрашиваем рейтинг без перезагрузки страницы; в скрытой вкладке опрос останавливается
   useEffect(() => {
@@ -105,7 +134,7 @@ export default function LeaderboardPage() {
             </div>
             <div>
               <h1>Лидерборд</h1>
-              <span className="eyebrow">Код манула · ночная смена в лаборатории генетики</span>
+              <span className="eyebrow" data-quest={questKey}>{questConfig.title} · {questConfig.brand_label}</span>
             </div>
           </div>
 

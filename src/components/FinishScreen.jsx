@@ -1,11 +1,14 @@
 import { RotateCcw, Trophy } from 'lucide-react';
 import { getEnding } from '../quest/zooQuest';
+import { getOrlovEnding } from '../quest/orlovQuest';
 import { formatDuration } from '../utils/format';
 import { splitStory } from './StoryInterlude';
 
 // Экран итогов: концовка по числу решённых заданий, итоги и призыв найти себя в рейтинге
 export default function FinishScreen({ summary, onRestart }) {
-  const ending = getEnding(summary.solvedCount, summary.totalTasks);
+  const ending = summary.questKey === 'orlov'
+    ? getOrlovEnding(summary.solvedCount, summary.totalTasks)
+    : getEnding(summary.solvedCount, summary.totalTasks);
   const fullName = `${summary.firstName} ${summary.lastName}`.trim();
   const leaderboardHref = `/leaderboard${fullName ? `?me=${encodeURIComponent(fullName)}` : ''}`;
 

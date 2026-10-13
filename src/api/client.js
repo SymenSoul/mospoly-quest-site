@@ -56,7 +56,12 @@ export async function request(path, { method = 'GET', token, body, signal } = {}
   return data;
 }
 
-// Регистрация участника: возвращает participant_id, token и started_at
+// Конфигурация, которую выбрал организатор в административной панели бэкенда.
+export function getQuestConfig({ signal } = {}) {
+  return request('/quest-config/', { signal });
+}
+
+// Регистрация участника: сервер сам назначает ему активный квест.
 export function registerParticipant({ firstName, lastName }) {
   return request('/participants/', {
     method: 'POST',
@@ -78,7 +83,16 @@ export function submitAttempt(token, taskId, answer) {
   });
 }
 
-// Общий рейтинг участников, доступен без авторизации
+// Фиксация полного или досрочного завершения на сервере.
+export function finishParticipant(token, reason) {
+  return request('/participants/finish/', {
+    method: 'POST',
+    token,
+    body: { reason },
+  });
+}
+
+// Рейтинг активного квеста, доступен без авторизации
 export function getRanking({ signal } = {}) {
   return request('/ranking/', { signal });
 }

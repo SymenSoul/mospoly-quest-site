@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BadgeCheck, ChevronRight, Play } from 'lucide-react';
 
 // Брифинг задания: текст печатается в терминале по абзацам, после — кнопка действия
-export default function StoryInterlude({ storyKey, text, isSolved, isFinal, hasPlayed, onRead, onStart, onNext, onFinish }) {
+export default function StoryInterlude({ storyKey, text, isSolved, isFinal, hasPlayed, onRead, onStart, onNext, onFinish, finishPending = false, transmissionLabel = 'Терминал лаборатории' }) {
   const paragraphs = useMemo(() => splitStory(text), [text]);
   const [typedParagraphs, setTypedParagraphs] = useState(() =>
     hasPlayed ? paragraphs : paragraphs.map(() => ''),
@@ -58,7 +58,7 @@ export default function StoryInterlude({ storyKey, text, isSolved, isFinal, hasP
   return (
     <div className="story-screen">
       <div className="story-copy console-story">
-        <span className="transmission">Терминал лаборатории</span>
+        <span className="transmission">{transmissionLabel}</span>
         <div className="console-lines" aria-live="polite">
           {typedParagraphs.map((paragraph, index) =>
             paragraph ? (
@@ -90,9 +90,9 @@ export default function StoryInterlude({ storyKey, text, isSolved, isFinal, hasP
           </button>
         )}
         {isSolved && isFinal && (
-          <button className="primary-action" disabled={!isComplete} onClick={onFinish}>
+          <button className="primary-action" disabled={!isComplete || finishPending} onClick={onFinish}>
             <BadgeCheck size={18} />
-            Получить ДНК-паспорт
+            {finishPending ? 'Сохраняем результат...' : 'Завершить квест'}
           </button>
         )}
       </div>

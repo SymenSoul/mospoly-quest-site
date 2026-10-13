@@ -1,4 +1,4 @@
-import { ApiError, getTasks, registerParticipant, submitAttempt } from '../api/client';
+import { ApiError, finishParticipant, getTasks, registerParticipant, submitAttempt } from '../api/client';
 
 // Ключ, под которым сессия хранится в localStorage
 const STORAGE_KEY = 'zoo-quest-session';
@@ -7,7 +7,7 @@ const STORAGE_KEY = 'zoo-quest-session';
 const LEGACY_PROGRESS_KEY = 'polytech-cyber-quest-progress';
 
 // Версия формата: при несовместимых изменениях полей старые сессии сбрасываются
-const SESSION_VERSION = 1;
+const SESSION_VERSION = 2;
 
 // Поля сессии и их начальные значения
 function createInitialState() {
@@ -33,6 +33,7 @@ function createInitialState() {
     // Когда и почему квест завершён: completed — пройден до конца, gave_up — участник сдался
     finishedAt: null,
     finishReason: null,
+    finishSummary: null,
   };
 }
 
@@ -104,6 +105,7 @@ export class QuestSession {
         lastName: response.last_name,
         token: response.token,
         startedAt: response.started_at,
+        quest: response.quest ?? null,
       },
     });
   }
@@ -155,35 +157,51 @@ export class QuestSession {
     return result;
   }
 
-  // Завершает квест: completed — все задания решены, gave_up — участник сдался.
-  // Попытки уже сохранены на бэкенде при отправке ответов, поэтому в рейтинг результат попадает сразу.
-  finish(reason) {
+  // Завершает квест на сервере; при ошибке сессия остаётся сохранённой для повтора.
+  async finish(reason) {
     if (this.#state.status === 'finished') return this.getSummary();
-
+    this.#requireParticipant();
+    const response = await finishParticipant(this.#state.participant.token, reason);
+    const finishSummary = {
+      score: Number(response.score) || 0,
+      solvedCount: Number(response.solved_tasks) || 0,
+      totalTasks: Number(response.total_tasks) || this.#state.tasks.length,
+      attemptsCount: Number(response.attempts_count) || 0,
+      durationSeconds: Number(response.time_seconds) || 0,
+      finishReason: response.finish_reason ?? reason,
+      finishedAt: response.finished_at,
+      questKey: response.quest_key ?? this.#state.participant?.quest?.key ?? 'zoo',
+    };
     this.#update({
       status: 'finished',
-      finishReason: reason,
-      finishedAt: new Date().toISOString(),
+      finishReason: finishSummary.finishReason,
+      finishedAt: finishSummary.finishedAt,
+      finishSummary,
     });
-
     return this.getSummary();
   }
 
-  // Итоги для экрана завершения; попытки считаются как в рейтинге — по решённым заданиям
+  // Итоги берутся с сервера после завершения; до этого показывается локальный расчёт.
   getSummary() {
-    const { participant, tasks, solved, attempts, points, finishedAt, finishReason } = this.#state;
+    const { participant, tasks, solved, attempts, points, finishedAt, finishReason, finishSummary } = this.#state;
     const end = finishedAt ? Date.parse(finishedAt) : Date.now();
     const start = participant?.startedAt ? Date.parse(participant.startedAt) : end;
-
-    return {
-      firstName: participant?.firstName ?? '',
-      lastName: participant?.lastName ?? '',
+    const localSummary = {
       score: solved.reduce((sum, key) => sum + (points[key] ?? 0), 0),
       solvedCount: solved.length,
       totalTasks: tasks.length,
       attemptsCount: solved.reduce((sum, key) => sum + (attempts[key] ?? 0), 0),
       durationSeconds: Math.max(0, Math.round((end - start) / 1000)),
       finishReason,
+    };
+
+    return {
+      firstName: participant?.firstName ?? '',
+      lastName: participant?.lastName ?? '',
+      ...localSummary,
+      ...(finishSummary ?? {}),
+      questKey: finishSummary?.questKey ?? participant?.quest?.key ?? 'zoo',
+      finishReason: finishSummary?.finishReason ?? finishReason,
     };
   }
 
@@ -247,6 +265,7 @@ function readStoredState() {
     readStories: isStringArray(saved.readStories) ? saved.readStories : initial.readStories,
     finishedAt: typeof saved.finishedAt === 'string' ? saved.finishedAt : null,
     finishReason: ['completed', 'gave_up'].includes(saved.finishReason) ? saved.finishReason : null,
+    finishSummary: isValidFinishSummary(saved.finishSummary) ? saved.finishSummary : null,
   };
 }
 
@@ -260,6 +279,17 @@ function removeLegacyProgress() {
 
 function isValidParticipant(value) {
   return Boolean(value && typeof value.token === 'string' && value.token && typeof value.firstName === 'string');
+}
+
+function isValidFinishSummary(value) {
+  return Boolean(
+    value &&
+    Number.isFinite(value.score) &&
+    Number.isFinite(value.solvedCount) &&
+    Number.isFinite(value.totalTasks) &&
+    Number.isFinite(value.attemptsCount) &&
+    Number.isFinite(value.durationSeconds),
+  );
 }
 
 function isStringArray(value) {

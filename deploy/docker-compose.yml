@@ -1,4 +1,3 @@
-
 services:
   caddy:
     image: caddy:2-alpine
@@ -10,6 +9,9 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - default
+      - quest_backend
 
   frontend-prod:
     image: ghcr.io/veselovese/mospoly-quest-site:main
@@ -22,3 +24,9 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+
+networks:
+  default: {}
+  quest_backend:
+    external: true
+    name: quest_backend
