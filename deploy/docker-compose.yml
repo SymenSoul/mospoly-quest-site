@@ -26,7 +26,6 @@ volumes:
   caddy_config:
 
 networks:
-  default: {}
   quest_backend:
     external: true
     name: quest_backend

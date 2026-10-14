@@ -1,40 +1,24 @@
+(django) {
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle /admin* {
+        reverse_proxy backend:8000
+    }
+    handle /static/* {
+        reverse_proxy backend:8000
+    }
+}
+
 :80 {
-    @api path /api /api/*
-    handle @api {
-        reverse_proxy backend:8000
-    }
-
-    @admin path /admin /admin/*
-    handle @admin {
-        reverse_proxy backend:8000
-    }
-
-    @static path /static /static/*
-    handle @static {
-        reverse_proxy backend:8000
-    }
-
+    import django
     handle {
         reverse_proxy frontend-prod:80
     }
 }
 
 :8080 {
-    @api path /api /api/*
-    handle @api {
-        reverse_proxy backend:8000
-    }
-
-    @admin path /admin /admin/*
-    handle @admin {
-        reverse_proxy backend:8000
-    }
-
-    @static path /static /static/*
-    handle @static {
-        reverse_proxy backend:8000
-    }
-
+    import django
     handle {
         reverse_proxy frontend-stage:80
     }
