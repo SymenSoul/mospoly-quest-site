@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Loader2, PawPrint, Trophy } from 'lucide-react';
+import { Loader2, PawPrint, TerminalSquare, Trophy } from 'lucide-react';
 
 const MAX_NAME_LENGTH = 50;
 
 // Экран входа: имя и фамилия нужны для рейтинга
-export default function RegistrationScreen({ notice, onRegister }) {
+export default function RegistrationScreen({ notice, onRegister, quest }) {
+  const config = quest ?? {};
+  const isOrlov = config.key === 'orlov';
+  const BrandIcon = isOrlov ? TerminalSquare : PawPrint;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
@@ -45,16 +48,14 @@ export default function RegistrationScreen({ notice, onRegister }) {
       <div className="welcome-card">
         <div className="welcome-brand">
           <div className="brand-mark">
-            <PawPrint size={26} />
+            <BrandIcon size={26} />
           </div>
-          <span className="eyebrow">Московский зоопарк · лаборатория генетики</span>
+          <span className="eyebrow">{config.brand_label || 'Квест'}</span>
         </div>
 
-        <h1>Код манула</h1>
-        <p className="welcome-lead">Ночная смена в лаборатории генетики Московского зоопарка.</p>
-        <p>
-          У манула родился детёныш, а база ДНК-паспортов дала сбой. Помогите восстановить данные до утра.
-        </p>
+        <h1>{config.title || 'Квест'}</h1>
+        <p className="welcome-lead">{config.welcome_lead || 'Введите имя и фамилию, чтобы начать.'}</p>
+        <p>{config.welcome_text || 'После регистрации задания и результаты будут связаны с этой сменой.'}</p>
 
         {notice && <p className="welcome-notice">{notice}</p>}
 
@@ -94,7 +95,7 @@ export default function RegistrationScreen({ notice, onRegister }) {
         </form>
 
         <div className="welcome-footer">
-          <span>20–30 минут · 7 заданий · завершить можно в любой момент</span>
+          <span>{config.duration_text || '20–30 минут'} · {config.task_count ?? 0} заданий · завершить можно в любой момент</span>
           <a href="/leaderboard">
             <Trophy size={15} />
             Посмотреть лидерборд

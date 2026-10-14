@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Globe2, Loader2, LogOut, Menu, PawPrint, RotateCcw, Trophy, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Globe2,
+  Loader2,
+  LogOut,
+  Menu,
+  PawPrint,
+  RotateCcw,
+  TerminalSquare,
+  Trophy,
+  X,
+} from 'lucide-react';
+import { getQuestConfig } from './api/client';
 import { useQuestSession } from './hooks/useQuestSession';
-import { BLOCKS, QUEST_TASKS, SHIFT_START_LOG, personalize } from './quest/zooQuest';
+import { getFallbackQuestConfig, normalizeQuestKey, QUEST_REGISTRY } from './quest/questRegistry';
 import ChallengeFrame from './components/ChallengeFrame';
 import ConfirmModal from './components/ConfirmModal';
 import FinishScreen from './components/FinishScreen';
@@ -10,19 +23,63 @@ import StoryInterlude from './components/StoryInterlude';
 import { plural } from './utils/format';
 
 const DEFAULT_ACCENT = { accent: '#29f0c8', accentRgb: '41, 240, 200' };
+const MOCK_QUEST_KEY = import.meta.env.VITE_MOCK_QUEST === 'orlov' ? 'orlov' : 'zoo';
 
 export default function App() {
-  // Сессия участника хранится в localStorage (src/session/QuestSession.js)
+  // Сессия участника хранится в localStorage (src/session/QuestSession.js).
   const { session, ...state } = useQuestSession();
-  // Итоги завершённой смены: к этому моменту локальная сессия уже сброшена
   const [summary, setSummary] = useState(null);
   const [notice, setNotice] = useState('');
+  const [finishError, setFinishError] = useState('');
+  const [finishPending, setFinishPending] = useState(false);
+  const [serverQuestConfig, setServerQuestConfig] = useState(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  // Активный квест задаёт сервер. Запасная конфигурация нужна для локального режима и ошибок сети.
+  useEffect(() => {
+    let timerId = null;
+    let controller = null;
+    let disposed = false;
+    const canRefresh = state.status !== 'active' && !summary;
+
+    async function refreshConfig() {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const config = await getQuestConfig({ signal: controller.signal });
+        if (!disposed) setServerQuestConfig(config);
+      } catch (error) {
+        if (!disposed && error.name !== 'AbortError') {
+          setServerQuestConfig((current) => current ?? getFallbackQuestConfig(MOCK_QUEST_KEY));
+        }
+      } finally {
+        if (!disposed) setConfigLoaded(true);
+        // Если экран регистрации открыт, активный квест обновляется без пересборки фронтенда.
+        if (!disposed && canRefresh) timerId = window.setTimeout(refreshConfig, 10000);
+      }
+    }
+
+    refreshConfig();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timerId);
+      controller?.abort();
+    };
+  }, [state.status, Boolean(summary)]);
+
+  const activeQuestKey = normalizeQuestKey(
+    state.status === 'active' ? state.participant?.quest?.key : serverQuestConfig?.key || MOCK_QUEST_KEY,
+  );
+  const questDefinition = QUEST_REGISTRY[activeQuestKey];
+  const questConfig = state.status === 'active' && state.participant?.quest
+    ? state.participant.quest
+    : serverQuestConfig ?? getFallbackQuestConfig(MOCK_QUEST_KEY);
 
   useEffect(() => {
-    document.title = 'Код манула — квест Московского зоопарка';
-  }, []);
+    document.title = `${questConfig.title || questDefinition.title} — квест`;
+  }, [questConfig.title, questDefinition.title]);
 
-  // Смену завершили, но страницу закрыли до сброса — показываем итоги и сбрасываем
+  // Если завершение прошло, но страницу закрыли до показа итогов, восстанавливаем их из локального снимка.
   useEffect(() => {
     if (state.status === 'finished' && !summary) {
       setSummary(session.getSummary());
@@ -33,17 +90,31 @@ export default function App() {
   async function register(firstName, lastName) {
     await session.register(firstName, lastName);
     setNotice('');
-    // Ошибку загрузки заданий покажет экран квеста с кнопкой повтора
+    // Ответ регистрации содержит закреплённый за участником квест.
     await session.loadTasks().catch(() => {});
   }
 
-  // Любое завершение: попытки уже на бэкенде, показываем итоги и сбрасываем локальный прогресс
-  function finish(reason) {
-    setSummary(session.finish(reason));
-    session.clear();
+  // Результаты фиксируются на сервере до локального сброса сессии.
+  async function finish(reason) {
+    setFinishError('');
+    setFinishPending(true);
+    try {
+      const result = await session.finish(reason);
+      setSummary({ ...result, questKey: normalizeQuestKey(result.questKey || activeQuestKey) });
+      session.clear();
+      return true;
+    } catch (error) {
+      setFinishError(
+        error.status === 0
+          ? 'Не удалось сохранить результат на сервере. Проверьте соединение и повторите завершение смены.'
+          : `Не удалось завершить смену: ${error.message}`,
+      );
+      return false;
+    } finally {
+      setFinishPending(false);
+    }
   }
 
-  // Токен не принят сервером (например, базу очистили) — начинаем заново
   const handleSessionLost = useCallback(() => {
     session.clear();
     setNotice('Сессия не найдена на сервере. Начните смену заново.');
@@ -58,14 +129,35 @@ export default function App() {
   }
 
   if (state.status !== 'active') {
+    if (!configLoaded) {
+      return (
+        <ScreenShell>
+          <div className="stage-status welcome-loading">
+            <Loader2 size={22} className="is-spinning" />
+            Загружаем настройки активного квеста...
+          </div>
+        </ScreenShell>
+      );
+    }
     return (
       <ScreenShell>
-        <RegistrationScreen notice={notice} onRegister={register} />
+        <RegistrationScreen notice={notice} onRegister={register} quest={questConfig} />
       </ScreenShell>
     );
   }
 
-  return <QuestScreen state={state} session={session} onFinish={finish} onSessionLost={handleSessionLost} />;
+  return (
+    <QuestScreen
+      state={state}
+      session={session}
+      onFinish={finish}
+      onSessionLost={handleSessionLost}
+      questDefinition={questDefinition}
+      questConfig={questConfig}
+      finishError={finishError}
+      finishPending={finishPending}
+    />
+  );
 }
 
 function ScreenShell({ children }) {
@@ -80,19 +172,29 @@ function ScreenShell({ children }) {
   );
 }
 
-function QuestScreen({ state, session, onFinish, onSessionLost }) {
+function QuestScreen({
+  state,
+  session,
+  onFinish,
+  onSessionLost,
+  questDefinition,
+  questConfig,
+  finishError,
+  finishPending,
+}) {
   const { participant, tasks, active, solved, attempts, points, showBriefing, readStories } = state;
   const [tasksStatus, setTasksStatus] = useState(() => ({ loading: tasks.length === 0, error: null }));
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [showFinishModal, setShowFinishModal] = useState(false);
-  // На узких экранах навигация и журнал спрятаны в раскрывающейся панели
   const [railOpen, setRailOpen] = useState(false);
+  const BrandIcon = questDefinition.key === 'orlov' ? TerminalSquare : PawPrint;
 
-  // Задания с бэкенда, для которых есть интерфейс, в порядке order
+  // Фронтенд показывает интерфейсы, соответствующие task_type из API.
   const questTasks = useMemo(
-    () => tasks.filter((task) => QUEST_TASKS[task.taskType]).map((task) => ({ ...task, ...QUEST_TASKS[task.taskType] })),
-    [tasks],
+    () => tasks.filter((task) => questDefinition.tasks[task.taskType])
+      .map((task) => ({ ...task, ...questDefinition.tasks[task.taskType] })),
+    [tasks, questDefinition],
   );
 
   const loadTasks = useCallback(async () => {
@@ -116,13 +218,11 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
   const index = Math.min(active, Math.max(questTasks.length - 1, 0));
   const task = questTasks[index];
 
-  // Сообщение о прошлой попытке не переносится на другое задание
   useEffect(() => {
     setFeedback(null);
   }, [task?.taskType, showBriefing]);
 
   const markStoryRead = useCallback((storyKey) => session.markStoryRead(storyKey), [session]);
-
   const solvedTasks = questTasks.filter((item) => solved.includes(item.taskType));
   const score = solvedTasks.reduce((sum, item) => sum + (points[item.taskType] ?? 0), 0);
   const progress = questTasks.length ? Math.round((solvedTasks.length / questTasks.length) * 100) : 0;
@@ -132,12 +232,9 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
   async function submitAnswer(answer) {
     setPending(true);
     setFeedback(null);
-
     try {
       const result = await session.submitAnswer(task.taskType, answer);
-
       if (result.correct) {
-        // Показываем итог задания — продолжение сюжета
         session.setShowBriefing(true);
       } else {
         setFeedback({
@@ -150,13 +247,11 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
         onSessionLost();
         return;
       }
-
       setFeedback({
         type: 'error',
-        message:
-          error.status === 0
-            ? 'Не удалось связаться с сервером. Проверьте интернет и нажмите ещё раз — ответ не потеряется.'
-            : `Не удалось проверить ответ: ${error.message}`,
+        message: error.status === 0
+          ? 'Не удалось связаться с сервером. Проверьте интернет и нажмите ещё раз — ответ не потеряется.'
+          : `Не удалось проверить ответ: ${error.message}`,
       });
     } finally {
       setPending(false);
@@ -182,11 +277,9 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
       <aside className={`side-rail ${railOpen ? 'is-open' : ''}`}>
         <div className="rail-top">
           <div className="brand">
-            <div className="brand-mark">
-              <PawPrint size={23} />
-            </div>
+            <div className="brand-mark"><BrandIcon size={23} /></div>
             <div>
-              <p>Код манула</p>
+              <p>{questConfig.title || questDefinition.title}</p>
               <span>Смена: {participant.firstName} {participant.lastName}</span>
             </div>
           </div>
@@ -202,20 +295,13 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
             {railOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
-          <div className="rail-progress" aria-hidden="true">
-            <span style={{ width: `${progress}%` }} />
-          </div>
+          <div className="rail-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
         </div>
 
         <div className="rail-details" id="rail-details">
           <div className="progress-block">
-            <div className="progress-head">
-              <span>Расследование</span>
-              <strong>{progress}%</strong>
-            </div>
-            <div className="progress-track">
-              <span style={{ width: `${progress}%` }} />
-            </div>
+            <div className="progress-head"><span>Прогресс</span><strong>{progress}%</strong></div>
+            <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
           </div>
 
           <nav className="mission-nav" aria-label="Задания квеста">
@@ -238,30 +324,18 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
           </nav>
 
           <div className="signal-panel">
-            <div className="panel-title">
-              <Globe2 size={16} />
-              Журнал смены
-            </div>
-            <code>{personalize(SHIFT_START_LOG, participant.firstName)}</code>
-            {solvedTasks.map((item) => (
-              <code key={item.taskType}>{item.log}</code>
-            ))}
+            <div className="panel-title"><Globe2 size={16} />Журнал смены</div>
+            <code>{questDefinition.personalize(questDefinition.shiftStartLog, participant.firstName)}</code>
+            {solvedTasks.map((item) => <code key={item.taskType}>{item.log}</code>)}
           </div>
 
           <div className="rail-actions">
-            <a className="ghost-action leaderboard-link" href="/leaderboard">
-              <Trophy size={16} />
-              Лидерборд
-            </a>
+            <a className="ghost-action leaderboard-link" href="/leaderboard"><Trophy size={16} />Лидерборд</a>
             <button
               className="ghost-action"
-              onClick={() => {
-                setRailOpen(false);
-                setShowFinishModal(true);
-              }}
+              onClick={() => { setRailOpen(false); setShowFinishModal(true); }}
             >
-              <LogOut size={16} />
-              Завершить смену
+              <LogOut size={16} />Завершить смену
             </button>
           </div>
         </div>
@@ -270,20 +344,25 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
       {showFinishModal && (
         <ConfirmModal
           title="Завершить смену?"
-          confirmLabel="Завершить"
+          confirmLabel={finishPending ? 'Сохраняем...' : 'Завершить'}
           cancelLabel="Продолжить смену"
+          confirmDisabled={finishPending}
           onCancel={() => setShowFinishModal(false)}
-          onConfirm={() => onFinish('gave_up')}
+          onConfirm={async () => {
+            const finished = await onFinish('gave_up');
+            if (finished) setShowFinishModal(false);
+          }}
         >
           <p>
             Квест закончится, а ваш результат — {score} {plural(score, ['балл', 'балла', 'баллов'])}, решено{' '}
-            {solvedTasks.length} из {questTasks.length} — попадёт в рейтинг. Продолжить с этого места потом не
-            получится.
+            {solvedTasks.length} из {questTasks.length} — попадёт в рейтинг. Продолжить с этого места потом не получится.
           </p>
+          {finishError && <p className="submit-feedback is-error" role="alert">{finishError}</p>}
         </ConfirmModal>
       )}
 
       <section className="stage">
+        {finishError && !showFinishModal && <p className="submit-feedback is-error finish-error" role="alert">{finishError}</p>}
         {!task ? (
           <TasksStatus status={tasksStatus} hasTasks={tasks.length > 0} onRetry={loadTasks} />
         ) : (
@@ -291,20 +370,18 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
             <header className="stage-header">
               <div>
                 <span className="eyebrow">
-                  Блок {task.block + 1} / {BLOCKS.length} · {BLOCKS[task.block]} · Задание {index + 1} / {questTasks.length}
+                  Блок {task.block + 1} / {questDefinition.blocks.length} · {questDefinition.blocks[task.block]} · Задание {index + 1} / {questTasks.length}
                 </span>
                 <h1>{task.title}</h1>
               </div>
-              <div className="module-token">
-                <task.icon size={24} />
-                <span>{task.label}</span>
-              </div>
+              <div className="module-token"><task.icon size={24} /><span>{task.label}</span></div>
             </header>
 
             {showBriefing ? (
               <QuestStory
                 task={task}
                 participant={participant}
+                personalizeText={questDefinition.personalize}
                 isSolved={solved.includes(task.taskType)}
                 isFinal={index === questTasks.length - 1}
                 earned={points[task.taskType]}
@@ -313,6 +390,8 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
                 onStart={() => session.setShowBriefing(false)}
                 onNext={goNext}
                 onFinish={() => onFinish('completed')}
+                finishPending={finishPending}
+                storyLabel={questDefinition.key === 'orlov' ? 'Терминал расследования' : 'Терминал лаборатории'}
               />
             ) : (
               <ChallengeFrame
@@ -335,10 +414,22 @@ function QuestScreen({ state, session, onFinish, onSessionLost }) {
   );
 }
 
-// Брифинг до задания или итог после решения
-function QuestStory({ task, participant, isSolved, isFinal, earned, readStories, onRead, onStart, onNext, onFinish }) {
+function QuestStory({
+  task,
+  participant,
+  personalizeText,
+  isSolved,
+  isFinal,
+  earned,
+  readStories,
+  onRead,
+  onStart,
+  onNext,
+  onFinish,
+  finishPending,
+  storyLabel,
+}) {
   const storyKey = `${task.taskType}-${isSolved ? 'outcome' : 'intro'}`;
-
   return (
     <>
       {isSolved && (
@@ -350,7 +441,7 @@ function QuestStory({ task, participant, isSolved, isFinal, earned, readStories,
       <StoryInterlude
         key={storyKey}
         storyKey={storyKey}
-        text={personalize(isSolved ? task.outcome : task.intro, participant.firstName)}
+        text={personalizeText(isSolved ? task.outcome : task.intro, participant.firstName)}
         isSolved={isSolved}
         isFinal={isFinal}
         hasPlayed={readStories.includes(storyKey)}
@@ -358,22 +449,17 @@ function QuestStory({ task, participant, isSolved, isFinal, earned, readStories,
         onStart={onStart}
         onNext={onNext}
         onFinish={onFinish}
+        finishPending={finishPending}
+        transmissionLabel={storyLabel}
       />
     </>
   );
 }
 
-// Загрузка заданий, ошибка загрузки или пустой список
 function TasksStatus({ status, hasTasks, onRetry }) {
   if (status.loading) {
-    return (
-      <div className="stage-status">
-        <Loader2 size={22} className="is-spinning" />
-        Загружаем задания...
-      </div>
-    );
+    return <div className="stage-status"><Loader2 size={22} className="is-spinning" />Загружаем задания...</div>;
   }
-
   return (
     <div className="stage-status">
       <AlertTriangle size={22} />
@@ -382,12 +468,9 @@ function TasksStatus({ status, hasTasks, onRetry }) {
           ? 'Не удалось загрузить задания: сервер не отвечает.'
           : `Не удалось загрузить задания: ${status.error.message}`
         : hasTasks
-          ? 'Для активных заданий нет интерфейса. Обновите страницу без кэша: Ctrl+F5.'
+          ? 'Для заданий активного квеста нет подходящего интерфейса. Проверьте версию фронтенда.'
           : 'Сейчас нет активных заданий. Обратитесь к организаторам.'}
-      <button className="primary-action" onClick={onRetry}>
-        <RotateCcw size={16} />
-        Повторить
-      </button>
+      <button className="primary-action" onClick={onRetry}><RotateCcw size={16} />Повторить</button>
     </div>
   );
 }

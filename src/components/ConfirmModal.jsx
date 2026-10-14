@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 // Окно подтверждения: закрывается по клику на фон и по Escape
-export default function ConfirmModal({ title, children, confirmLabel, cancelLabel, onConfirm, onCancel }) {
+export default function ConfirmModal({ title, children, confirmLabel, cancelLabel, onConfirm, onCancel, confirmDisabled = false }) {
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.key === 'Escape') onCancel();
@@ -29,10 +29,10 @@ export default function ConfirmModal({ title, children, confirmLabel, cancelLabe
         {children}
 
         <div className="action-row">
-          <button className="ghost-action" onClick={onCancel}>
+          <button className="ghost-action" onClick={onCancel} disabled={confirmDisabled}>
             {cancelLabel}
           </button>
-          <button className="primary-action" onClick={onConfirm}>
+          <button className="primary-action" onClick={onConfirm} disabled={confirmDisabled}>
             {confirmLabel}
           </button>
         </div>
