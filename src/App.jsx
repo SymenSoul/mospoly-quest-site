@@ -21,6 +21,7 @@ import FinishScreen from './components/FinishScreen';
 import RegistrationScreen from './components/RegistrationScreen';
 import StoryInterlude from './components/StoryInterlude';
 import { plural } from './utils/format';
+import { isCompletionStorageKey, readCompletion } from './session/completionStore';
 
 const DEFAULT_ACCENT = { accent: '#29f0c8', accentRgb: '41, 240, 200' };
 const MOCK_QUEST_KEY = import.meta.env.VITE_MOCK_QUEST === 'orlov' ? 'orlov' : 'zoo';
@@ -74,6 +75,19 @@ export default function App() {
   const questConfig = state.status === 'active' && state.participant?.quest
     ? state.participant.quest
     : serverQuestConfig ?? getFallbackQuestConfig(MOCK_QUEST_KEY);
+  const [, refreshCompletion] = useState(0);
+  const completedSummary = readCompletion(questConfig.key);
+
+  // Завершение в другой вкладке закрывает сохранённую активную сессию здесь.
+  useEffect(() => {
+    const syncCompletion = (event) => {
+      if (!isCompletionStorageKey(event.key)) return;
+      if (readCompletion(session.state.participant?.quest?.key ?? questConfig.key)) session.clear();
+      refreshCompletion((value) => value + 1);
+    };
+    window.addEventListener('storage', syncCompletion);
+    return () => window.removeEventListener('storage', syncCompletion);
+  }, [session, questConfig.key]);
 
   useEffect(() => {
     document.title = `${questConfig.title || questDefinition.title} — квест`;
@@ -88,7 +102,7 @@ export default function App() {
   }, [state.status, summary, session]);
 
   async function register(firstName, lastName) {
-    await session.register(firstName, lastName);
+    await session.register(firstName, lastName, questConfig.key);
     setNotice('');
     // Ответ регистрации содержит закреплённый за участником квест.
     await session.loadTasks().catch(() => {});
@@ -120,10 +134,10 @@ export default function App() {
     setNotice('Сессия не найдена на сервере. Начните смену заново.');
   }, [session]);
 
-  if (summary) {
+  if (summary || completedSummary) {
     return (
       <ScreenShell>
-        <FinishScreen summary={summary} onRestart={() => setSummary(null)} />
+        <FinishScreen summary={summary ?? completedSummary} />
       </ScreenShell>
     );
   }

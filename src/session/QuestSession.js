@@ -1,4 +1,5 @@
 import { ApiError, finishParticipant, getTasks, registerParticipant, submitAttempt } from '../api/client';
+import { readCompletion, rememberCompletion } from './completionStore';
 
 // Ключ, под которым сессия хранится в localStorage
 const STORAGE_KEY = 'zoo-quest-session';
@@ -47,6 +48,7 @@ export class QuestSession {
   static load() {
     const session = new QuestSession();
     session.#state = readStoredState() ?? createInitialState();
+    if (session.#state.status === 'finished') rememberCompletion(session.getSummary());
     removeLegacyProgress();
     return session;
   }
@@ -93,7 +95,10 @@ export class QuestSession {
   }
 
   // Регистрирует участника на бэкенде и начинает новую сессию
-  async register(firstName, lastName) {
+  async register(firstName, lastName, questKey) {
+    if (this.#state.status !== 'new' || readCompletion(questKey)) {
+      throw new ApiError('На этом устройстве смена уже начата или завершена.', { status: 409 });
+    }
     const response = await registerParticipant({ firstName: firstName.trim(), lastName: lastName.trim() });
 
     this.#replace({
@@ -172,6 +177,7 @@ export class QuestSession {
       finishedAt: response.finished_at,
       questKey: response.quest_key ?? this.#state.participant?.quest?.key ?? 'zoo',
     };
+    rememberCompletion({ ...this.getSummary(), ...finishSummary });
     this.#update({
       status: 'finished',
       finishReason: finishSummary.finishReason,
@@ -225,6 +231,9 @@ export class QuestSession {
   #requireParticipant() {
     if (!this.#state.participant) {
       throw new ApiError('Участник не зарегистрирован', { status: 401 });
+    }
+    if (readCompletion(this.#state.participant.quest?.key ?? 'zoo')) {
+      throw new ApiError('Смена уже завершена.', { status: 409 });
     }
   }
 
