@@ -19,6 +19,7 @@ import ChallengeFrame from './components/ChallengeFrame';
 import ConfirmModal from './components/ConfirmModal';
 import FinishScreen from './components/FinishScreen';
 import RegistrationScreen from './components/RegistrationScreen';
+import QuestContentProtection from './components/QuestContentProtection';
 import StoryInterlude from './components/StoryInterlude';
 import { plural } from './utils/format';
 
@@ -362,6 +363,7 @@ function QuestScreen({
       )}
 
       <section className="stage">
+        <QuestContentProtection participant={participant}>
         {finishError && !showFinishModal && <p className="submit-feedback is-error finish-error" role="alert">{finishError}</p>}
         {!task ? (
           <TasksStatus status={tasksStatus} hasTasks={tasks.length > 0} onRetry={loadTasks} />
@@ -409,6 +411,7 @@ function QuestScreen({
             )}
           </>
         )}
+        </QuestContentProtection>
       </section>
     </main>
   );
