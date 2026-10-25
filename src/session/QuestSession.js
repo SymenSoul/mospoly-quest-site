@@ -1,3 +1,4 @@
+import { skipTaskState } from './taskNavigation.js';
 import { ApiError, finishParticipant, getTasks, registerParticipant, submitAttempt } from '../api/client';
 
 // Ключ, под которым сессия хранится в localStorage
@@ -22,6 +23,8 @@ function createInitialState() {
     active: 0,
     // Ключи решённых заданий
     solved: [],
+    // Необратимо пропущенные задания: доступны только сюжетные итоги.
+    skipped: [],
     // Число попыток по заданиям: { [ключ]: число }
     attempts: {},
     // Начисленные баллы по заданиям: { [ключ]: баллы }
@@ -132,6 +135,9 @@ export class QuestSession {
   // Отправляет ответ на проверку. Возвращает { correct, pointsEarned, attemptsCount }
   async submitAnswer(taskKey, answer) {
     this.#requireParticipant();
+    if (this.#state.skipped.includes(taskKey)) {
+      throw new ApiError('Пропущенное задание недоступно для решения.', { status: 409 });
+    }
     const task = this.getTask(taskKey);
 
     if (!task) {
@@ -205,6 +211,12 @@ export class QuestSession {
     };
   }
 
+  // Пропуск не создаёт успешную попытку и не начисляет баллы.
+  skipTask(taskKey) {
+    this.#requireParticipant();
+    this.#update(skipTaskState(this.#state, taskKey));
+  }
+
   // Состояние интерфейса квеста
 
   setActive(active) {
@@ -259,6 +271,7 @@ function readStoredState() {
     status: participant && ['active', 'finished'].includes(saved.status) ? saved.status : initial.status,
     active: Number.isInteger(saved.active) && saved.active >= 0 ? saved.active : initial.active,
     solved: isStringArray(saved.solved) ? saved.solved : initial.solved,
+    skipped: isStringArray(saved.skipped) ? saved.skipped : initial.skipped,
     attempts: isNumberMap(saved.attempts) ? saved.attempts : initial.attempts,
     points: isNumberMap(saved.points) ? saved.points : initial.points,
     showBriefing: typeof saved.showBriefing === 'boolean' ? saved.showBriefing : initial.showBriefing,
