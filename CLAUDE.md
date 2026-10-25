@@ -53,7 +53,7 @@ npm run preview
   рабочая область, памятка и подсказки; сообщение о результате попытки — под кнопкой отправки (`SubmitAction`).
 - `src/session/QuestSession.js` — класс сессии участника: поля (участник с токеном, задания, решённые,
   попытки, баллы, состояние интерфейса, завершение) и методы `load/save/clear`, `register`, `loadTasks`,
-  `submitAnswer`, `finish`, `getSummary`. Хранится в localStorage под ключом `zoo-quest-session`
+  `submitAnswer`, `skipTask`, `finish`, `getSummary`. Хранится в localStorage под ключом `zoo-quest-session`
   с полем `version`; при несовместимом изменении полей увеличить `SESSION_VERSION`.
 - `src/hooks/useQuestSession.js` — единственный экземпляр сессии на вкладку и хук для React
   (`useSyncExternalStore`). Компоненты меняют состояние только через методы сессии.
@@ -120,6 +120,10 @@ https://docs.google.com/document/d/1fm_Te2qU-venO1RUg8qCLwjuakVoO_niPZM05p0PdNw/
 - Перед коммитом: `npm run build` без ошибок.
 - Изменения интерфейса проверять в браузере на ширинах 320, 375, 768, 1440 и 2400 px — без горизонтальной
   прокрутки страницы.
+
+## Пропуск заданий (#25)
+
+`skipped` — необратимо пропущенные задания (старые снимки version 2 получают пустой список). `taskNavigation.js` управляет открытием шагов. Пропуск показывает сюжетный итог, не вызывает attempts API и не даёт баллов. Форма ответа после пропуска недоступна; `submitAnswer` отклоняет отправку. При пропусках завершение идёт с `gave_up`, поскольку текущий API не поддерживает полный финал с пропусками. См. `docs/skip-task.md`. Проверка: `node --test tests/taskNavigation.test.js`.
 
 ## Git и процесс
 
