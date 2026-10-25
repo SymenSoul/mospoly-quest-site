@@ -20,6 +20,7 @@ import ConfirmModal from './components/ConfirmModal';
 import FinishScreen from './components/FinishScreen';
 import RegistrationScreen from './components/RegistrationScreen';
 import StoryInterlude from './components/StoryInterlude';
+import { getUnlockedTasks } from './session/taskNavigation.js';
 import { plural } from './utils/format';
 
 const DEFAULT_ACCENT = { accent: '#29f0c8', accentRgb: '41, 240, 200' };
@@ -188,6 +189,7 @@ function QuestScreen({
   const [feedback, setFeedback] = useState(null);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [showSkipModal, setShowSkipModal] = useState(false);
   const BrandIcon = questDefinition.key === 'orlov' ? TerminalSquare : PawPrint;
 
   // Фронтенд показывает интерфейсы, соответствующие task_type из API.
@@ -226,7 +228,7 @@ function QuestScreen({
   const solvedTasks = questTasks.filter((item) => solved.includes(item.taskType));
   const score = solvedTasks.reduce((sum, item) => sum + (points[item.taskType] ?? 0), 0);
   const progress = questTasks.length ? Math.round((solvedTasks.length / questTasks.length) * 100) : 0;
-  const unlocked = questTasks.map((item, itemIndex) => itemIndex === 0 || solved.includes(questTasks[itemIndex - 1].taskType));
+  const unlocked = getUnlockedTasks(questTasks, solved, state.skipped);
   const accent = task ?? DEFAULT_ACCENT;
 
   async function submitAnswer(answer) {
@@ -312,11 +314,11 @@ function QuestScreen({
                 <button
                   key={item.taskType}
                   className={`nav-node ${index === itemIndex ? 'active' : ''} ${done ? 'done' : ''}`}
-                  disabled={!unlocked[itemIndex]}
+                  disabled={!unlocked[itemIndex] || pending || finishPending}
                   onClick={() => openTask(itemIndex)}
                 >
                   <Icon size={18} />
-                  <span>{item.label}</span>
+                  <span>{item.label}{state.skipped.includes(item.taskType) && !done ? ' · пропущено' : ''}</span>
                   {done && <Check size={16} />}
                 </button>
               );
@@ -340,6 +342,21 @@ function QuestScreen({
           </div>
         </div>
       </aside>
+
+      {showSkipModal && task && (
+        <ConfirmModal
+          title="Пропустить задание?"
+          confirmLabel="Пропустить"
+          cancelLabel="Продолжить решение"
+          onCancel={() => setShowSkipModal(false)}
+          onConfirm={() => {
+            session.skipTask(task.taskType);
+            setShowSkipModal(false);
+          }}
+        >
+          <p>За пропущенное задание баллы не начисляются. Вернуться к его решению нельзя. Вы получите информацию для продолжения сюжета.</p>
+        </ConfirmModal>
+      )}
 
       {showFinishModal && (
         <ConfirmModal
@@ -377,19 +394,32 @@ function QuestScreen({
               <div className="module-token"><task.icon size={24} /><span>{task.label}</span></div>
             </header>
 
-            {showBriefing ? (
+            <div className="task-content">
+            {state.skipped.includes(task.taskType) && !solved.includes(task.taskType) && (
+              <p className="submit-feedback" role="status">Задание пропущено, баллы не начислены. Доступен только сюжетный итог.</p>
+            )}
+            {!solved.includes(task.taskType) && !state.skipped.includes(task.taskType) && (
+              <div className="action-row task-skip-actions">
+                <button className="ghost-action" disabled={pending || finishPending} onClick={() => setShowSkipModal(true)}>
+                  Пропустить задание
+                </button>
+              </div>
+            )}
+
+            {showBriefing || state.skipped.includes(task.taskType) ? (
               <QuestStory
                 task={task}
                 participant={participant}
                 personalizeText={questDefinition.personalize}
                 isSolved={solved.includes(task.taskType)}
+                isSkipped={state.skipped.includes(task.taskType)}
                 isFinal={index === questTasks.length - 1}
                 earned={points[task.taskType]}
                 readStories={readStories}
                 onRead={markStoryRead}
                 onStart={() => session.setShowBriefing(false)}
                 onNext={goNext}
-                onFinish={() => onFinish('completed')}
+                onFinish={() => solvedTasks.length === questTasks.length ? onFinish('completed') : setShowFinishModal(true)}
                 finishPending={finishPending}
                 storyLabel={questDefinition.key === 'orlov' ? 'Терминал расследования' : 'Терминал лаборатории'}
               />
@@ -407,6 +437,7 @@ function QuestScreen({
                 />
               </ChallengeFrame>
             )}
+            </div>
           </>
         )}
       </section>
@@ -419,6 +450,7 @@ function QuestStory({
   participant,
   personalizeText,
   isSolved,
+  isSkipped,
   isFinal,
   earned,
   readStories,
@@ -429,7 +461,8 @@ function QuestStory({
   finishPending,
   storyLabel,
 }) {
-  const storyKey = `${task.taskType}-${isSolved ? 'outcome' : 'intro'}`;
+  const resolved = isSolved || isSkipped;
+  const storyKey = `${task.taskType}-${resolved ? 'outcome' : 'intro'}`;
   return (
     <>
       {isSolved && (
@@ -441,8 +474,8 @@ function QuestStory({
       <StoryInterlude
         key={storyKey}
         storyKey={storyKey}
-        text={personalizeText(isSolved ? task.outcome : task.intro, participant.firstName)}
-        isSolved={isSolved}
+        text={personalizeText(resolved ? task.outcome : task.intro, participant.firstName)}
+        isSolved={resolved}
         isFinal={isFinal}
         hasPlayed={readStories.includes(storyKey)}
         onRead={onRead}

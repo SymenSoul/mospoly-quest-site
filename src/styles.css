@@ -250,6 +250,19 @@ button:disabled {
   gap: 24px;
 }
 
+/* Служебные действия и сюжет находятся в одной строке основного grid. */
+.task-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.task-content > .story-screen,
+.task-content > .challenge-frame {
+  flex: 1;
+}
+
 .stage-header {
   display: flex;
   align-items: flex-start;
