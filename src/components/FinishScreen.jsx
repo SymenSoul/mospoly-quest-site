@@ -24,6 +24,7 @@ export default function FinishScreen({ summary }) {
       <div className="finish-card">
         <span className="eyebrow">{ending.isFinal ? 'Финал' : 'Смена завершена'}</span>
         <h1>{ending.title}</h1>
+        {fullName && <p>Участник: <strong>{fullName}</strong></p>}
 
         <div className="finish-text">
           {splitStory(ending.text).map((paragraph) => (
