@@ -1,22 +1,26 @@
 import { useState } from 'react';
-import { Loader2, PawPrint, TerminalSquare, Trophy } from 'lucide-react';
+import { Loader2, PawPrint, RefreshCw, TerminalSquare, Trophy } from 'lucide-react';
+import { generateNickname } from '../utils/nickname';
 
 const MAX_NAME_LENGTH = 50;
 
-// Экран входа: имя и фамилия нужны для рейтинга
+// По умолчанию участник получает ник; ручной ввод сохраняет прежний сценарий входа.
 export default function RegistrationScreen({ notice, onRegister, quest }) {
   const config = quest ?? {};
   const isOrlov = config.key === 'orlov';
   const BrandIcon = isOrlov ? TerminalSquare : PawPrint;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [nickname, setNickname] = useState(() => generateNickname());
+  const [useOwnName, setUseOwnName] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const first = firstName.trim();
-    const last = lastName.trim();
+    if (pending) return;
+    const first = (useOwnName ? firstName : nickname.firstName).trim();
+    const last = (useOwnName ? lastName : nickname.lastName).trim();
 
     if (!first || !last) {
       setError('Введите имя и фамилию');
@@ -60,6 +64,21 @@ export default function RegistrationScreen({ notice, onRegister, quest }) {
         {notice && <p className="welcome-notice">{notice}</p>}
 
         <form className="welcome-form" onSubmit={handleSubmit} noValidate>
+          {!useOwnName && (
+            <div className="nickname-picker">
+              <span>Ваш ник</span>
+              <strong aria-live="polite" aria-atomic="true">{nickname.firstName} {nickname.lastName}</strong>
+              <button
+                className="ghost-action"
+                type="button"
+                disabled={pending}
+                onClick={() => setNickname((current) => generateNickname(current))}
+              >
+                <RefreshCw size={18} />Другой ник
+              </button>
+            </div>
+          )}
+          {useOwnName && <>
           <label className="query-part">
             <span>Имя</span>
             <input
@@ -68,6 +87,7 @@ export default function RegistrationScreen({ notice, onRegister, quest }) {
               onChange={(event) => setFirstName(event.target.value)}
               autoComplete="given-name"
               maxLength={MAX_NAME_LENGTH + 10}
+              disabled={pending}
             />
           </label>
           <label className="query-part">
@@ -78,9 +98,19 @@ export default function RegistrationScreen({ notice, onRegister, quest }) {
               onChange={(event) => setLastName(event.target.value)}
               autoComplete="family-name"
               maxLength={MAX_NAME_LENGTH + 10}
+              disabled={pending}
             />
           </label>
+          </>}
           <small>Так вас увидят в рейтинге</small>
+          <button
+            className="ghost-action"
+            type="button"
+            disabled={pending}
+            onClick={() => { setUseOwnName((current) => !current); setError(''); }}
+          >
+            {useOwnName ? 'Использовать случайный ник' : 'Ввести имя и фамилию'}
+          </button>
 
           {error && (
             <p className="submit-feedback is-error" role="alert">
