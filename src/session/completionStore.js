@@ -16,7 +16,7 @@ function validSummary(value, questKey, eventCode) {
   return typeof questKey === 'string' && questKey.length > 0 && value?.questKey === questKey
     && (value.eventCode ?? null) === (eventCode ?? null)
     && typeof value.firstName === 'string' && typeof value.lastName === 'string'
-    && ['completed', 'gave_up'].includes(value.finishReason)
+    && ['completed', 'gave_up', 'timeout'].includes(value.finishReason)
     && ['score', 'solvedCount', 'totalTasks', 'attemptsCount', 'durationSeconds']
       .every((key) => Number.isFinite(value[key]) && value[key] >= 0);
 }

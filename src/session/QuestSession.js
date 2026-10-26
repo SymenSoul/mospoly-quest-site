@@ -1,5 +1,6 @@
 import { skipTaskState } from './taskNavigation.js';
 import { ApiError, finishParticipant, getTasks, registerParticipant, submitAttempt } from '../api/client';
+import { clockOffset } from './questTimer';
 import { readCompletion, rememberCompletion } from './completionStore';
 
 // Ключ, под которым сессия хранится в localStorage
@@ -14,8 +15,9 @@ const SESSION_VERSION = 2;
 // Поля сессии и их начальные значения
 function createInitialState() {
   return {
-    // Участник от POST /api/participants/: { id, firstName, lastName, token, startedAt, quest, event },
-    // где event — мероприятие { code, title }, на котором он зарегистрирован
+    // Участник от POST /api/participants/: { id, firstName, lastName, token, startedAt, quest, event,
+    // deadlineAt, clockOffsetMs }, где event — мероприятие { code, title }, deadlineAt — конец смены
+    // по часам сервера, clockOffsetMs — насколько часы сервера впереди часов устройства
     participant: null,
     // Задания от GET /api/tasks/, отсортированные по order: [{ id, title, taskType, points, order }]
     tasks: [],
@@ -35,7 +37,8 @@ function createInitialState() {
     showBriefing: true,
     // Брифинги, текст которых уже напечатан
     readStories: [],
-    // Когда и почему квест завершён: completed — пройден до конца, gave_up — участник сдался
+    // Когда и почему квест завершён: completed — пройден до конца, gave_up — участник сдался,
+    // timeout — вышло время смены
     finishedAt: null,
     finishReason: null,
     finishSummary: null,
@@ -108,6 +111,7 @@ export class QuestSession {
       lastName: lastName.trim(),
       eventCode: event.code,
     });
+    const receivedAt = Date.now();
 
     this.#replace({
       ...createInitialState(),
@@ -120,6 +124,8 @@ export class QuestSession {
         startedAt: response.started_at,
         quest: response.quest ?? event.quest,
         event: { code: String(response.event_code ?? event.code), title: event.title ?? '' },
+        deadlineAt: response.deadline_at ?? null,
+        clockOffsetMs: clockOffset(response.server_time, receivedAt),
       },
     });
   }
@@ -178,14 +184,21 @@ export class QuestSession {
   async finish(reason) {
     if (this.#state.status === 'finished') return this.getSummary();
     this.#requireParticipant();
-    const response = await finishParticipant(this.#state.participant.token, reason);
+    let response;
+    try {
+      response = await finishParticipant(this.#state.participant.token, reason);
+    } catch (error) {
+      // Пока бэкенд не знает причину timeout, время вышедшей смены фиксируется как досрочное завершение
+      if (reason !== 'timeout' || error.status !== 400) throw error;
+      response = await finishParticipant(this.#state.participant.token, 'gave_up');
+    }
     const finishSummary = {
       score: Number(response.score) || 0,
       solvedCount: Number(response.solved_tasks) || 0,
       totalTasks: Number(response.total_tasks) || this.#state.tasks.length,
       attemptsCount: Number(response.attempts_count) || 0,
       durationSeconds: Number(response.time_seconds) || 0,
-      finishReason: response.finish_reason ?? reason,
+      finishReason: reason === 'timeout' ? 'timeout' : response.finish_reason ?? reason,
       finishedAt: response.finished_at,
       questKey: response.quest_key ?? this.#state.participant?.quest?.key ?? 'zoo',
       eventCode: this.#state.participant?.event?.code ?? null,
@@ -295,7 +308,7 @@ function readStoredState() {
     showBriefing: typeof saved.showBriefing === 'boolean' ? saved.showBriefing : initial.showBriefing,
     readStories: isStringArray(saved.readStories) ? saved.readStories : initial.readStories,
     finishedAt: typeof saved.finishedAt === 'string' ? saved.finishedAt : null,
-    finishReason: ['completed', 'gave_up'].includes(saved.finishReason) ? saved.finishReason : null,
+    finishReason: ['completed', 'gave_up', 'timeout'].includes(saved.finishReason) ? saved.finishReason : null,
     finishSummary: isValidFinishSummary(saved.finishSummary) ? saved.finishSummary : null,
   };
 }
