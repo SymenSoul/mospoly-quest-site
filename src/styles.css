@@ -2263,3 +2263,60 @@ th {
 .network-layout .workbench {
   grid-column: 1 / -1;
 }
+
+/* Ограничения действуют только в активном квесте. Поля ответов остаются редактируемыми. */
+.quest-content-protection {
+  display: contents;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.quest-content-protection input,
+.quest-content-protection textarea,
+.quest-content-protection [contenteditable]:not([contenteditable="false"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.quest-watermarks {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.quest-watermarks span {
+  max-width: 100%;
+  padding: 8px;
+  transform: rotate(-20deg);
+  color: rgba(160, 190, 200, 0.16);
+  font-size: 0.8rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .quest-watermarks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  body.quest-content-protected #root {
+    display: none !important;
+  }
+
+  body.quest-content-protected::after {
+    content: 'Печать заданий недоступна.';
+    display: block;
+    color: #000;
+    font-size: 16pt;
+  }
+}
