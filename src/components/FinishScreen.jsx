@@ -22,7 +22,9 @@ export default function FinishScreen({ summary, onChangeEvent }) {
   return (
     <div className="finish-screen">
       <div className="finish-card">
-        <span className="eyebrow">{ending.isFinal ? 'Финал' : 'Смена завершена'}</span>
+        <span className="eyebrow">
+          {summary.finishReason === 'timeout' ? 'Время смены вышло' : ending.isFinal ? 'Финал' : 'Смена завершена'}
+        </span>
         <h1>{ending.title}</h1>
         {fullName && <p>Участник: <strong>{fullName}</strong></p>}
         {summary.eventCode && <p>Мероприятие: <strong>{summary.eventCode}</strong></p>}

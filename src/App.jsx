@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
   Globe2,
+  Hourglass,
   Loader2,
   LogOut,
   Menu,
@@ -21,8 +22,10 @@ import FinishScreen from './components/FinishScreen';
 import RegistrationScreen from './components/RegistrationScreen';
 import EventCodeScreen from './components/EventCodeScreen';
 import QuestContentProtection from './components/QuestContentProtection';
+import QuestTimer from './components/QuestTimer';
 import StoryInterlude from './components/StoryInterlude';
 import { getUnlockedTasks } from './session/taskNavigation.js';
+import { isTimeExpired, resolveDeadline, resolveTimeLimit } from './session/questTimer';
 import { plural } from './utils/format';
 import { isCompletionStorageKey, readCompletion } from './session/completionStore';
 import {
@@ -171,6 +174,11 @@ export default function App() {
       session.clear();
       return true;
     } catch (error) {
+      // Сервер не знает токен — повтор не поможет, начинаем смену заново
+      if (error.status === 401) {
+        handleSessionLost();
+        return false;
+      }
       setFinishError(
         error.status === 0
           ? 'Не удалось сохранить результат на сервере. Проверьте соединение и повторите завершение смены.'
@@ -292,6 +300,22 @@ function QuestScreen({
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
+  // Лимит времени смены: дедлайн с сервера или от начала смены (docs/quest-timer.md)
+  const limitSeconds = resolveTimeLimit(questConfig, getFallbackQuestConfig(questDefinition.key).time_limit_seconds);
+  const deadline = resolveDeadline(participant, limitSeconds);
+  const [timeUp, setTimeUp] = useState(false);
+  const timeUpStarted = useRef(false);
+
+  // Время вышло: смена завершается один раз, пока сохраняется результат — задания закрыты оверлеем
+  const handleTimeUp = useCallback(() => {
+    if (timeUpStarted.current) return;
+    timeUpStarted.current = true;
+    setTimeUp(true);
+    setShowFinishModal(false);
+    setShowSkipModal(false);
+    setRailOpen(false);
+    onFinish('timeout');
+  }, [onFinish]);
   const BrandIcon = questDefinition.key === 'orlov' ? TerminalSquare : PawPrint;
 
   // Фронтенд показывает интерфейсы, соответствующие task_type из API.
@@ -351,6 +375,10 @@ function QuestScreen({
         onSessionLost();
         return;
       }
+      if (isTimeExpired(error)) {
+        handleTimeUp();
+        return;
+      }
       setFeedback({
         type: 'error',
         message: error.status === 0
@@ -388,6 +416,10 @@ function QuestScreen({
               {eventCode && <span>Мероприятие {eventCode}</span>}
             </div>
           </div>
+
+          {deadline !== null && (
+            <QuestTimer deadline={deadline} offsetMs={participant.clockOffsetMs ?? 0} onExpire={handleTimeUp} />
+          )}
 
           <button
             className="ghost-action rail-toggle"
@@ -479,6 +511,32 @@ function QuestScreen({
           </p>
           {finishError && <p className="submit-feedback is-error" role="alert">{finishError}</p>}
         </ConfirmModal>
+      )}
+
+      {timeUp && (
+        <div className="reset-modal-backdrop time-up-backdrop">
+          <div className="challenge-frame reset-modal" role="alertdialog" aria-modal="true" aria-labelledby="time-up-title">
+            <div className="panel-title">
+              <Hourglass size={16} />
+              Лимит времени
+            </div>
+            <h2 id="time-up-title">Время смены вышло</h2>
+            {finishError ? (
+              <>
+                <p className="submit-feedback is-error" role="alert">{finishError}</p>
+                <button className="primary-action" disabled={finishPending} onClick={() => onFinish('timeout')}>
+                  <RotateCcw size={16} />
+                  Повторить
+                </button>
+              </>
+            ) : (
+              <p className="time-up-status">
+                <Loader2 size={18} className="is-spinning" />
+                Сохраняем результат...
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
       <section className="stage">

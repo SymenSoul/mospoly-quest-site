@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Loader2, PawPrint, RefreshCw, TerminalSquare, Ticket, Trophy } from 'lucide-react';
 import { generateNickname } from '../utils/nickname';
 import { leaderboardHref } from '../session/eventCode';
+import { resolveTimeLimit } from '../session/questTimer';
+import { plural } from '../utils/format';
 
 const MAX_NAME_LENGTH = 50;
 
@@ -10,6 +12,8 @@ export default function RegistrationScreen({ notice, onRegister, quest, event, o
   const config = quest ?? {};
   const isOrlov = config.key === 'orlov';
   const BrandIcon = isOrlov ? TerminalSquare : PawPrint;
+  const timeLimit = resolveTimeLimit(config);
+  const timeLimitMinutes = timeLimit ? Math.round(timeLimit / 60) : null;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [nickname, setNickname] = useState(() => generateNickname());
@@ -141,7 +145,11 @@ export default function RegistrationScreen({ notice, onRegister, quest, event, o
         </form>
 
         <div className="welcome-footer">
-          <span>{config.duration_text || '20–30 минут'} · {config.task_count ?? 0} заданий · завершить можно в любой момент</span>
+          <span>
+            {config.duration_text || '20–30 минут'} · {config.task_count ?? 0} заданий
+            {timeLimitMinutes ? ` · лимит ${timeLimitMinutes} ${plural(timeLimitMinutes, ['минута', 'минуты', 'минут'])}` : ''}
+            {' · '}завершить можно в любой момент
+          </span>
           <a href={leaderboardHref(event?.code)}>
             <Trophy size={15} />
             Посмотреть лидерборд

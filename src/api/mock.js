@@ -4,6 +4,9 @@ import { ApiError } from './client.js';
 const DB_KEY = 'quest-mock-db-v3';
 const LATENCY_MS = 180;
 
+// Для быстрой проверки таймера лимит можно сократить: VITE_MOCK_TIME_LIMIT_SECONDS=90 в .env.mock.local
+const MOCK_TIME_LIMIT_SECONDS = Number(import.meta.env.VITE_MOCK_TIME_LIMIT_SECONDS) || null;
+
 // Мероприятия: код задаёт квест и рейтинг (docs/event-code.md)
 const EVENTS = {
   6479: { code: '6479', title: 'Демо: Московский зоопарк', quest_key: 'zoo', is_active: true },
@@ -95,7 +98,20 @@ function randomId(length = 32) {
 function publicQuestConfig(key) {
   const quest = QUESTS[key];
   const taskCount = TASKS.filter((task) => task.quest_key === key && task.is_active).length;
-  return { ...quest, task_count: taskCount };
+  return { ...quest, task_count: taskCount, time_limit_seconds: timeLimit(key) };
+}
+
+// Лимит времени смены хранится у квеста: зоопарк — 40 минут, Орлов — 30
+function timeLimit(questKey) {
+  return MOCK_TIME_LIMIT_SECONDS ?? (questKey === 'orlov' ? 30 * 60 : 40 * 60);
+}
+
+// После дедлайна сервер не принимает ответы (docs/quest-timer.md)
+function requireTimeLeft(participant) {
+  if (participant.deadline_at && Date.now() > Date.parse(participant.deadline_at)) {
+    const detail = 'Время смены истекло.';
+    throw new ApiError(detail, { status: 409, data: { detail, code: 'time_expired' } });
+  }
 }
 
 // Мероприятие по коду; для регистрации оно должно быть открыто
@@ -143,6 +159,7 @@ function registerParticipant(db, body) {
     event_code: event.code,
     quest_key: event.quest_key,
     started_at: now,
+    deadline_at: new Date(Date.parse(now) + timeLimit(event.quest_key) * 1000).toISOString(),
     finished_at: null,
     finish_reason: null,
   };
@@ -153,6 +170,8 @@ function registerParticipant(db, body) {
     last_name: participant.last_name,
     token: participant.token,
     started_at: participant.started_at,
+    deadline_at: participant.deadline_at,
+    server_time: new Date().toISOString(),
     event_code: participant.event_code,
     quest: publicQuestConfig(participant.quest_key),
   };
@@ -167,6 +186,7 @@ function submitAttempt(db, participant, taskId, body) {
   const task = TASKS.find((item) => item.id === taskId && item.quest_key === participant.quest_key && item.is_active);
   if (!task) throw new ApiError('Задание не найдено в текущем квесте.', { status: 404, data: { detail: 'Задание не найдено в текущем квесте.' } });
   if (participant.finished_at) throw new ApiError('Смена уже завершена.', { status: 409, data: { detail: 'Смена уже завершена.' } });
+  requireTimeLeft(participant);
 
   const answer = String(body?.answer ?? '');
   const result = db.task_results.find((item) => item.participant_id === participant.id && item.task_id === task.id);
@@ -202,7 +222,7 @@ function finishParticipant(db, participant, body) {
   }
   if (!participant.finished_at) {
     participant.finished_at = new Date().toISOString();
-    participant.finish_reason = body?.reason === 'completed' ? 'completed' : 'gave_up';
+    participant.finish_reason = ['completed', 'timeout'].includes(body?.reason) ? body.reason : 'gave_up';
   }
   const results = db.task_results.filter((item) => item.participant_id === participant.id);
   const score = results.reduce((sum, item) => sum + item.points_earned, 0);
@@ -216,8 +236,14 @@ function finishParticipant(db, participant, body) {
     score,
     solved_tasks: results.length,
     attempts_count: attempts,
-    time_seconds: Math.max(0, Math.floor((Date.parse(participant.finished_at) - Date.parse(participant.started_at)) / 1000)),
+    time_seconds: elapsedSeconds(participant),
   };
+}
+
+// Время смены для итогов и рейтинга: не больше лимита квеста
+function elapsedSeconds(participant) {
+  const seconds = Math.floor((Date.parse(participant.finished_at) - Date.parse(participant.started_at)) / 1000);
+  return Math.min(Math.max(0, seconds), timeLimit(participant.quest_key));
 }
 
 function buildRanking(db, eventCode) {
@@ -231,7 +257,7 @@ function buildRanking(db, eventCode) {
       score: demo?.score ?? results.reduce((sum, item) => sum + item.points_earned, 0),
       solved_tasks: demo?.solved ?? results.length,
       attempts_count: demo?.attempts ?? results.reduce((sum, item) => sum + item.attempts_count, 0),
-      time_seconds: demo?.seconds ?? Math.max(0, Math.round((Date.parse(participant.finished_at) - Date.parse(participant.started_at)) / 1000)),
+      time_seconds: demo?.seconds ?? elapsedSeconds(participant),
     };
   }).sort((a, b) => b.score - a.score || b.solved_tasks - a.solved_tasks || a.attempts_count - b.attempts_count || a.time_seconds - b.time_seconds)
     .map((row, index) => ({ place: index + 1, ...row }));
