@@ -1,11 +1,11 @@
-import { RotateCcw, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { getEnding } from '../quest/zooQuest';
 import { getOrlovEnding } from '../quest/orlovQuest';
 import { formatDuration } from '../utils/format';
 import { splitStory } from './StoryInterlude';
 
 // Экран итогов: концовка по числу решённых заданий, итоги и призыв найти себя в рейтинге
-export default function FinishScreen({ summary, onRestart }) {
+export default function FinishScreen({ summary }) {
   const ending = summary.questKey === 'orlov'
     ? getOrlovEnding(summary.solvedCount, summary.totalTasks)
     : getEnding(summary.solvedCount, summary.totalTasks);
@@ -24,6 +24,7 @@ export default function FinishScreen({ summary, onRestart }) {
       <div className="finish-card">
         <span className="eyebrow">{ending.isFinal ? 'Финал' : 'Смена завершена'}</span>
         <h1>{ending.title}</h1>
+        {fullName && <p>Участник: <strong>{fullName}</strong></p>}
 
         <div className="finish-text">
           {splitStory(ending.text).map((paragraph) => (
@@ -45,14 +46,10 @@ export default function FinishScreen({ summary, onRestart }) {
             <Trophy size={18} />
             Найди себя на лидерборде
           </a>
-          <button className="ghost-action" onClick={onRestart}>
-            <RotateCcw size={16} />
-            Начать новую смену
-          </button>
         </div>
 
         <p className="finish-note">
-          Результат сохранён. На этом устройстве прогресс сброшен — следующий участник начнёт с начала.
+          Результат сохранён. Повторное прохождение этого квеста на этом устройстве недоступно.
         </p>
       </div>
     </div>
