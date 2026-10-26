@@ -14,7 +14,8 @@ const SESSION_VERSION = 2;
 // Поля сессии и их начальные значения
 function createInitialState() {
   return {
-    // Участник от POST /api/participants/: { id, firstName, lastName, token, startedAt }
+    // Участник от POST /api/participants/: { id, firstName, lastName, token, startedAt, quest, event },
+    // где event — мероприятие { code, title }, на котором он зарегистрирован
     participant: null,
     // Задания от GET /api/tasks/, отсортированные по order: [{ id, title, taskType, points, order }]
     tasks: [],
@@ -97,12 +98,16 @@ export class QuestSession {
     this.#replace(createInitialState(), { persist: false });
   }
 
-  // Регистрирует участника на бэкенде и начинает новую сессию
-  async register(firstName, lastName, questKey) {
-    if (this.#state.status !== 'new' || readCompletion(questKey)) {
+  // Регистрирует участника на мероприятии и начинает новую сессию. event — { code, title, quest }
+  async register(firstName, lastName, event) {
+    if (this.#state.status !== 'new' || readCompletion(event.quest.key, event.code)) {
       throw new ApiError('На этом устройстве смена уже начата или завершена.', { status: 409 });
     }
-    const response = await registerParticipant({ firstName: firstName.trim(), lastName: lastName.trim() });
+    const response = await registerParticipant({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      eventCode: event.code,
+    });
 
     this.#replace({
       ...createInitialState(),
@@ -113,7 +118,8 @@ export class QuestSession {
         lastName: response.last_name,
         token: response.token,
         startedAt: response.started_at,
-        quest: response.quest ?? null,
+        quest: response.quest ?? event.quest,
+        event: { code: String(response.event_code ?? event.code), title: event.title ?? '' },
       },
     });
   }
@@ -182,6 +188,7 @@ export class QuestSession {
       finishReason: response.finish_reason ?? reason,
       finishedAt: response.finished_at,
       questKey: response.quest_key ?? this.#state.participant?.quest?.key ?? 'zoo',
+      eventCode: this.#state.participant?.event?.code ?? null,
     };
     rememberCompletion({ ...this.getSummary(), ...finishSummary });
     this.#update({
@@ -213,6 +220,7 @@ export class QuestSession {
       ...localSummary,
       ...(finishSummary ?? {}),
       questKey: finishSummary?.questKey ?? participant?.quest?.key ?? 'zoo',
+      eventCode: participant?.event?.code ?? null,
       finishReason: finishSummary?.finishReason ?? finishReason,
     };
   }
@@ -244,7 +252,8 @@ export class QuestSession {
     if (!this.#state.participant) {
       throw new ApiError('Участник не зарегистрирован', { status: 401 });
     }
-    if (readCompletion(this.#state.participant.quest?.key ?? 'zoo')) {
+    const { quest, event } = this.#state.participant;
+    if (readCompletion(quest?.key ?? 'zoo', event?.code ?? null)) {
       throw new ApiError('Смена уже завершена.', { status: 409 });
     }
   }

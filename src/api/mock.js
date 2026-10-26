@@ -1,9 +1,15 @@
 // Мок API для локальной разработки. В рабочей сборке модуль не подключается.
 import { ApiError } from './client.js';
 
-const DB_KEY = 'multi-quest-mock-db-v2';
+const DB_KEY = 'quest-mock-db-v3';
 const LATENCY_MS = 180;
-const MOCK_ACTIVE_QUEST = import.meta.env.VITE_MOCK_QUEST === 'orlov' ? 'orlov' : 'zoo';
+
+// Мероприятия: код задаёт квест и рейтинг (docs/event-code.md)
+const EVENTS = {
+  6479: { code: '6479', title: 'Демо: Московский зоопарк', quest_key: 'zoo', is_active: true },
+  1234: { code: '1234', title: 'Демо: расследование Орлова', quest_key: 'orlov', is_active: true },
+  '0000': { code: '0000', title: 'Прошедшее мероприятие', quest_key: 'zoo', is_active: false },
+};
 
 const QUESTS = {
   zoo: {
@@ -36,13 +42,14 @@ const TASKS = [
 ].map((task) => ({ ...task, is_active: true }));
 
 const DEMO_PARTICIPANTS = [
-  { first_name: 'Иван', last_name: 'Иванов', score: 80, solved: 6, attempts: 8, seconds: 1240, quest_key: 'zoo' },
-  { first_name: 'Анна', last_name: 'Петрова', score: 75, solved: 6, attempts: 9, seconds: 1310, quest_key: 'zoo' },
-  { first_name: 'Мария', last_name: 'Соколова', score: 55, solved: 4, attempts: 7, seconds: 980, quest_key: 'zoo' },
-  { first_name: 'Артём', last_name: 'Кузнецов', score: 35, solved: 3, attempts: 6, seconds: 760, quest_key: 'zoo' },
-  { first_name: 'Полина', last_name: 'Морозова', score: 10, solved: 1, attempts: 3, seconds: 420, quest_key: 'zoo' },
-  { first_name: 'Илья', last_name: 'Орлов', score: 60, solved: 4, attempts: 6, seconds: 1000, quest_key: 'orlov' },
-  { first_name: 'Елена', last_name: 'Соколова', score: 55, solved: 4, attempts: 5, seconds: 940, quest_key: 'orlov' },
+  { first_name: 'Иван', last_name: 'Иванов', score: 80, solved: 6, attempts: 8, seconds: 1240, event_code: '6479' },
+  { first_name: 'Анна', last_name: 'Петрова', score: 75, solved: 6, attempts: 9, seconds: 1310, event_code: '6479' },
+  { first_name: 'Мария', last_name: 'Соколова', score: 55, solved: 4, attempts: 7, seconds: 980, event_code: '6479' },
+  { first_name: 'Артём', last_name: 'Кузнецов', score: 35, solved: 3, attempts: 6, seconds: 760, event_code: '6479' },
+  { first_name: 'Полина', last_name: 'Морозова', score: 10, solved: 1, attempts: 3, seconds: 420, event_code: '6479' },
+  { first_name: 'Илья', last_name: 'Орлов', score: 60, solved: 4, attempts: 6, seconds: 1000, event_code: '1234' },
+  { first_name: 'Елена', last_name: 'Соколова', score: 55, solved: 4, attempts: 5, seconds: 940, event_code: '1234' },
+  { first_name: 'Ольга', last_name: 'Белова', score: 70, solved: 5, attempts: 6, seconds: 1500, event_code: '0000' },
 ];
 
 function createDb() {
@@ -53,7 +60,8 @@ function createDb() {
       first_name: demo.first_name,
       last_name: demo.last_name,
       token: `demo-token-${index + 1}`,
-      quest_key: demo.quest_key,
+      event_code: demo.event_code,
+      quest_key: EVENTS[demo.event_code].quest_key,
       started_at: new Date(now - demo.seconds * 1000).toISOString(),
       finished_at: new Date(now).toISOString(),
       finish_reason: 'completed',
@@ -90,6 +98,23 @@ function publicQuestConfig(key) {
   return { ...quest, task_count: taskCount };
 }
 
+// Мероприятие по коду; для регистрации оно должно быть открыто
+function findEvent(code, { requireActive = false } = {}) {
+  const event = EVENTS[String(code ?? '')];
+  if (!event) {
+    throw new ApiError('Мероприятие не найдено.', { status: 404, data: { detail: 'Мероприятие не найдено.' } });
+  }
+  if (requireActive && !event.is_active) {
+    const detail = 'Мероприятие завершено. Регистрация закрыта.';
+    throw new ApiError(detail, { status: 403, data: { detail } });
+  }
+  return event;
+}
+
+function publicEvent(event) {
+  return { code: event.code, title: event.title, is_active: event.is_active, quest: publicQuestConfig(event.quest_key) };
+}
+
 function requireParticipant(db, token) {
   const participant = db.participants.find((item) => item.token === token);
   if (!token || !participant) {
@@ -107,6 +132,7 @@ function registerParticipant(db, body) {
   if (firstName.length > 50) errors.first_name = ['Не более 50 символов.'];
   if (lastName.length > 50) errors.last_name = ['Не более 50 символов.'];
   if (Object.keys(errors).length > 0) throw new ApiError('Проверьте имя и фамилию', { status: 400, data: errors });
+  const event = findEvent(body?.event_code, { requireActive: true });
 
   const now = new Date().toISOString();
   const participant = {
@@ -114,7 +140,8 @@ function registerParticipant(db, body) {
     first_name: firstName,
     last_name: lastName,
     token: randomId(40),
-    quest_key: MOCK_ACTIVE_QUEST,
+    event_code: event.code,
+    quest_key: event.quest_key,
     started_at: now,
     finished_at: null,
     finish_reason: null,
@@ -126,6 +153,7 @@ function registerParticipant(db, body) {
     last_name: participant.last_name,
     token: participant.token,
     started_at: participant.started_at,
+    event_code: participant.event_code,
     quest: publicQuestConfig(participant.quest_key),
   };
 }
@@ -192,8 +220,9 @@ function finishParticipant(db, participant, body) {
   };
 }
 
-function buildRanking(db) {
-  return db.participants.filter((participant) => participant.quest_key === MOCK_ACTIVE_QUEST && participant.finished_at).map((participant) => {
+function buildRanking(db, eventCode) {
+  const event = findEvent(eventCode);
+  return db.participants.filter((participant) => participant.event_code === event.code && participant.finished_at).map((participant) => {
     const results = db.task_results.filter((item) => item.participant_id === participant.id);
     const demo = participant.demo;
     return {
@@ -209,12 +238,12 @@ function buildRanking(db) {
 }
 
 const routes = [
-  { method: 'GET', pattern: /^\/quest-config\/$/, handle: () => publicQuestConfig(MOCK_ACTIVE_QUEST) },
+  { method: 'GET', pattern: /^\/events\/(\d+)\/$/, handle: ({ match }) => publicEvent(findEvent(match[1])) },
+  { method: 'GET', pattern: /^\/events\/(\d+)\/ranking\/$/, handle: ({ db, match }) => buildRanking(db, match[1]) },
   { method: 'POST', pattern: /^\/participants\/$/, handle: ({ db, body }) => registerParticipant(db, body) },
   { method: 'POST', pattern: /^\/participants\/finish\/$/, handle: ({ db, token, body }) => finishParticipant(db, requireParticipant(db, token), body) },
   { method: 'GET', pattern: /^\/tasks\/$/, handle: ({ db, token }) => listTasks(requireParticipant(db, token)) },
   { method: 'POST', pattern: /^\/tasks\/(\d+)\/attempts\/$/, handle: ({ db, token, body, match }) => submitAttempt(db, requireParticipant(db, token), Number(match[1]), body) },
-  { method: 'GET', pattern: /^\/ranking\/$/, handle: ({ db }) => buildRanking(db) },
   { method: 'GET', pattern: /^\/health\/$/, handle: () => ({ status: 'ok', database: 'ok' }) },
 ];
 

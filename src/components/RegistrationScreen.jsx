@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Loader2, PawPrint, RefreshCw, TerminalSquare, Trophy } from 'lucide-react';
+import { Loader2, PawPrint, RefreshCw, TerminalSquare, Ticket, Trophy } from 'lucide-react';
 import { generateNickname } from '../utils/nickname';
+import { leaderboardHref } from '../session/eventCode';
 
 const MAX_NAME_LENGTH = 50;
 
 // По умолчанию участник получает ник; ручной ввод сохраняет прежний сценарий входа.
-export default function RegistrationScreen({ notice, onRegister, quest }) {
+export default function RegistrationScreen({ notice, onRegister, quest, event, onChangeEvent }) {
   const config = quest ?? {};
   const isOrlov = config.key === 'orlov';
   const BrandIcon = isOrlov ? TerminalSquare : PawPrint;
@@ -56,6 +57,21 @@ export default function RegistrationScreen({ notice, onRegister, quest }) {
           </div>
           <span className="eyebrow">{config.brand_label || 'Квест'}</span>
         </div>
+
+        {event && (
+          <div className="event-badge">
+            <Ticket size={16} />
+            <span>
+              Мероприятие <strong>{event.code}</strong>
+              {event.title ? ` · ${event.title}` : ''}
+            </span>
+            {onChangeEvent && (
+              <button type="button" className="event-change" onClick={onChangeEvent} disabled={pending}>
+                Сменить код
+              </button>
+            )}
+          </div>
+        )}
 
         <h1>{config.title || 'Квест'}</h1>
         <p className="welcome-lead">{config.welcome_lead || 'Введите имя и фамилию, чтобы начать.'}</p>
@@ -126,7 +142,7 @@ export default function RegistrationScreen({ notice, onRegister, quest }) {
 
         <div className="welcome-footer">
           <span>{config.duration_text || '20–30 минут'} · {config.task_count ?? 0} заданий · завершить можно в любой момент</span>
-          <a href="/leaderboard">
+          <a href={leaderboardHref(event?.code)}>
             <Trophy size={15} />
             Посмотреть лидерборд
           </a>
