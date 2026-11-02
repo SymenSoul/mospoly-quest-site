@@ -107,3 +107,10 @@ export function finishParticipant(token, reason) {
 export function getEventRanking(code, { signal } = {}) {
   return request(`/events/${encodeURIComponent(code)}/ranking/`, { signal });
 }
+
+// Идемпотентное открытие подсказки: сервер фиксирует номер до выдачи текста.
+export function revealTaskHint(token, taskId, hintIndex) {
+  return request(`/tasks/${taskId}/hints/`, {
+    method: 'POST', token, body: { hint_index: hintIndex },
+  });
+}

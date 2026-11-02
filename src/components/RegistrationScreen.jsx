@@ -6,6 +6,23 @@ import { resolveTimeLimit } from '../session/questTimer';
 import { plural } from '../utils/format';
 
 const MAX_NAME_LENGTH = 50;
+// Код мероприятия: 4–8 цифр, как проверяет бэкенд.
+const EVENT_CODE_PATTERN = /^\d{4,8}$/;
+
+// Код можно передать в ссылке (?event=6479), например через QR-код на мероприятии.
+function readEventCodeFromUrl() {
+  const code = new URLSearchParams(window.location.search).get('event') ?? '';
+  return code.replace(/\D/g, '').slice(0, 8);
+}
+
+// Понятный текст для ошибок регистрации, связанных с кодом мероприятия.
+function registrationErrorText(err) {
+  if (err.status === 0) return 'Не удалось начать смену: сервер не отвечает. Попробуйте ещё раз';
+  if (err.status === 404) return 'Мероприятие с таким кодом не найдено. Проверьте код';
+  if (err.status === 403) return 'Регистрация на это мероприятие закрыта';
+  if (err.status === 400 && err.data?.event_code) return 'Введите код мероприятия: 4–8 цифр';
+  return `Не удалось начать смену: ${err.message}`;
+}
 
 // По умолчанию участник получает ник; ручной ввод сохраняет прежний сценарий входа.
 export default function RegistrationScreen({ notice, onRegister, quest, event, onChangeEvent }) {
@@ -18,6 +35,7 @@ export default function RegistrationScreen({ notice, onRegister, quest, event, o
   const [lastName, setLastName] = useState('');
   const [nickname, setNickname] = useState(() => generateNickname());
   const [useOwnName, setUseOwnName] = useState(false);
+  const [eventCode, setEventCode] = useState(readEventCodeFromUrl);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -26,6 +44,12 @@ export default function RegistrationScreen({ notice, onRegister, quest, event, o
     if (pending) return;
     const first = (useOwnName ? firstName : nickname.firstName).trim();
     const last = (useOwnName ? lastName : nickname.lastName).trim();
+
+    const code = eventCode.trim();
+    if (!EVENT_CODE_PATTERN.test(code)) {
+      setError('Введите код мероприятия: 4–8 цифр');
+      return;
+    }
 
     if (!first || !last) {
       setError('Введите имя и фамилию');
@@ -41,13 +65,9 @@ export default function RegistrationScreen({ notice, onRegister, quest, event, o
     setPending(true);
 
     try {
-      await onRegister(first, last);
+      await onRegister(first, last, code);
     } catch (err) {
-      setError(
-        err.status === 0
-          ? 'Не удалось начать смену: сервер не отвечает. Попробуйте ещё раз'
-          : `Не удалось начать смену: ${err.message}`,
-      );
+      setError(registrationErrorText(err));
       setPending(false);
     }
   }
@@ -84,6 +104,19 @@ export default function RegistrationScreen({ notice, onRegister, quest, event, o
         {notice && <p className="welcome-notice">{notice}</p>}
 
         <form className="welcome-form" onSubmit={handleSubmit} noValidate>
+          <label className="query-part">
+            <span>Код мероприятия</span>
+            <input
+              className="answer-input"
+              value={eventCode}
+              onChange={(event) => setEventCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Например, 6479"
+              maxLength={8}
+              disabled={pending}
+            />
+          </label>
           {!useOwnName && (
             <div className="nickname-picker">
               <span>Ваш ник</span>

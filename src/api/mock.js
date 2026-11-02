@@ -1,4 +1,6 @@
 // Мок API для локальной разработки. В рабочей сборке модуль не подключается.
+import { QUEST_TASKS as ZOO_TASKS } from '../quest/zooQuest.js';
+import { ORLOV_TASKS } from '../quest/orlovQuest.js';
 import { ApiError } from './client.js';
 
 const DB_KEY = 'quest-mock-db-v3';
@@ -72,13 +74,14 @@ function createDb() {
     })),
     attempts: [],
     task_results: [],
+    hint_usage: [],
   };
 }
 
 function loadDb() {
   try {
     const saved = JSON.parse(localStorage.getItem(DB_KEY));
-    if (saved && Array.isArray(saved.participants) && Array.isArray(saved.attempts)) return saved;
+    if (saved && Array.isArray(saved.participants) && Array.isArray(saved.attempts)) return { ...saved, hint_usage: saved.hint_usage ?? [] };
   } catch {
     // При повреждённом локальном состоянии создаётся новая база мока.
   }
@@ -147,6 +150,8 @@ function registerParticipant(db, body) {
   if (!lastName) errors.last_name = ['Обязательное поле.'];
   if (firstName.length > 50) errors.first_name = ['Не более 50 символов.'];
   if (lastName.length > 50) errors.last_name = ['Не более 50 символов.'];
+  const eventCode = body?.event_code;
+  if (eventCode !== undefined && !/^\d{4,8}$/.test(String(eventCode))) errors.event_code = ['Введите правильное значение.'];
   if (Object.keys(errors).length > 0) throw new ApiError('Проверьте имя и фамилию', { status: 400, data: errors });
   const event = findEvent(body?.event_code, { requireActive: true });
 
@@ -177,9 +182,42 @@ function registerParticipant(db, body) {
   };
 }
 
-function listTasks(participant) {
+function listTasks(db, participant) {
   if (participant.finished_at) throw new ApiError('Смена уже завершена.', { status: 409, data: { detail: 'Смена уже завершена.' } });
-  return TASKS.filter((task) => task.quest_key === participant.quest_key && task.is_active).map(({ id, title, task_type, points, order }) => ({ id, title, task_type, points, order }));
+  return TASKS.filter((task) => task.quest_key === participant.quest_key && task.is_active).map((task) => ({
+    id: task.id, title: task.title, task_type: task.task_type, points: task.points, order: task.order,
+    hint_penalty: { points_per_hint: 1, max_hints: taskHints(task).length },
+    ...hintReceipt(db, participant, task),
+  }));
+}
+
+function taskHints(task) {
+  return (task.quest_key === 'orlov' ? ORLOV_TASKS : ZOO_TASKS)[task.task_type]?.hints ?? [];
+}
+
+function hintReceipt(db, participant, task) {
+  const used = db.hint_usage.find((item) => item.participant_id === participant.id && item.task_id === task.id)?.count ?? 0;
+  return { hints_used: used, available_points: Math.max(0, task.points - used) };
+}
+
+function revealHint(db, participant, taskId, body) {
+  const task = TASKS.find((item) => item.id === taskId && item.quest_key === participant.quest_key && item.is_active);
+  if (!task) throw new ApiError('Задание не найдено.', { status: 404 });
+  if (participant.finished_at || db.task_results.some((item) => item.participant_id === participant.id && item.task_id === taskId)) {
+    throw new ApiError('Задание уже завершено.', { status: 409 });
+  }
+  const index = body?.hint_index;
+  const current = hintReceipt(db, participant, task).hints_used;
+  if (!Number.isInteger(index) || index < 1 || index > taskHints(task).length || index > current + 1) {
+    throw new ApiError('Недопустимый номер подсказки.', { status: 400 });
+  }
+  let usage = db.hint_usage.find((item) => item.participant_id === participant.id && item.task_id === taskId);
+  if (!usage) {
+    usage = { participant_id: participant.id, task_id: taskId, count: 0 };
+    db.hint_usage.push(usage);
+  }
+  usage.count = Math.max(usage.count, index);
+  return hintReceipt(db, participant, task);
 }
 
 function submitAttempt(db, participant, taskId, body) {
@@ -194,11 +232,12 @@ function submitAttempt(db, participant, taskId, body) {
 
   const attemptNumber = db.attempts.filter((item) => item.participant_id === participant.id && item.task_id === task.id).length + 1;
   const isCorrect = answer === task.correct_answer;
+  const awardedPoints = hintReceipt(db, participant, task).available_points;
   const now = new Date().toISOString();
   db.attempts.push({ participant_id: participant.id, task_id: task.id, answer, is_correct: isCorrect, attempt_number: attemptNumber, created_at: now });
 
   if (isCorrect) {
-    db.task_results.push({ participant_id: participant.id, task_id: task.id, points_earned: task.points, attempts_count: attemptNumber, completed_at: now });
+    db.task_results.push({ participant_id: participant.id, task_id: task.id, points_earned: awardedPoints, attempts_count: attemptNumber, completed_at: now });
     const activeCount = TASKS.filter((item) => item.quest_key === participant.quest_key && item.is_active).length;
     const solvedCount = db.task_results.filter((item) => item.participant_id === participant.id).length;
     if (activeCount > 0 && solvedCount === activeCount) {
@@ -206,7 +245,7 @@ function submitAttempt(db, participant, taskId, body) {
       participant.finish_reason = 'completed';
     }
   }
-  return { correct: isCorrect, points_earned: isCorrect ? task.points : 0, attempts_count: attemptNumber };
+  return { correct: isCorrect, points_earned: isCorrect ? awardedPoints : 0, attempts_count: attemptNumber };
 }
 
 function finishParticipant(db, participant, body) {
@@ -268,7 +307,7 @@ const routes = [
   { method: 'GET', pattern: /^\/events\/(\d+)\/ranking\/$/, handle: ({ db, match }) => buildRanking(db, match[1]) },
   { method: 'POST', pattern: /^\/participants\/$/, handle: ({ db, body }) => registerParticipant(db, body) },
   { method: 'POST', pattern: /^\/participants\/finish\/$/, handle: ({ db, token, body }) => finishParticipant(db, requireParticipant(db, token), body) },
-  { method: 'GET', pattern: /^\/tasks\/$/, handle: ({ db, token }) => listTasks(requireParticipant(db, token)) },
+  { method: 'GET', pattern: /^\/tasks\/$/, handle: ({ db, token }) => listTasks(db, requireParticipant(db, token)) },
   { method: 'POST', pattern: /^\/tasks\/(\d+)\/attempts\/$/, handle: ({ db, token, body, match }) => submitAttempt(db, requireParticipant(db, token), Number(match[1]), body) },
   { method: 'GET', pattern: /^\/health\/$/, handle: () => ({ status: 'ok', database: 'ok' }) },
 ];

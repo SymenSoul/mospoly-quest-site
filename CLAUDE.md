@@ -84,9 +84,10 @@ npm run preview
 Источник истины — документ «Backend (1)»:
 https://docs.google.com/document/d/1fm_Te2qU-venO1RUg8qCLwjuakVoO_niPZM05p0PdNw/edit
 
-- `GET /api/events/{code}/` → `{code, title, is_active, quest}` — мероприятие и его квест, без авторизации.
 - `POST /api/participants/` `{first_name, last_name, event_code}` → `{participant_id, first_name, last_name, token,
-  started_at, event_code, quest}`, без авторизации.
+  started_at, event_code, deadline_at, server_time, quest}`, без авторизации. `event_code` — код мероприятия из 4–8 цифр
+  (создаётся в админке бэкенда); неизвестный код — 404, закрытая регистрация — 403. Экран регистрации берёт код
+  из поля ввода или из ссылки `?event=6479`.
 - `GET /api/tasks/` → `[{id, title, task_type, points, order}]` — только активные задания, без правильного ответа.
 - `POST /api/tasks/{task_id}/attempts/` `{answer}` → `{correct, points_earned, attempts_count}`.
 - `POST /api/participants/finish/` `{reason: completed|gave_up|timeout}` → итоги участника (`score`, `solved_tasks`,
@@ -135,6 +136,10 @@ https://docs.google.com/document/d/1fm_Te2qU-venO1RUg8qCLwjuakVoO_niPZM05p0PdNw/
 - Адаптив (320–2400 px): брейкпоинты 1080 (боковая панель → компактная верхняя с меню), 860, 560, 360.
   `:root` масштабирует шрифт через `clamp()` на больших экранах, поэтому ширины контейнеров задаются в `rem`.
   Широкие таблицы и код прокручиваются внутри своего блока, а не всей страницей. Зоны нажатия — от 44 px.
+
+## Подсказки со штрафом (#24, клиентская часть)
+
+См. `docs/hint-penalties.md`: `POST /tasks/{id}/hints/`, идемпотентный номер, серверные `hint_penalty/hints_used/available_points` в `GET /tasks/`. Без политики новые подсказки не раскрываются. `QuestSession.revealHint` сохраняет только подтверждённый результат. Mock уменьшает награду/итог/рейтинг на 1 балл за каждую подсказку; рабочая политика задаётся сервером.
 
 ## Проверка изменений
 
